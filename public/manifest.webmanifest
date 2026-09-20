@@ -1,0 +1,17 @@
+{
+  "name": "Habit Tracker",
+  "short_name": "Habits",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#12121c",
+  "theme_color": "#12121c",
+  "description": "Track habits, streaks, goals, and daily progress.",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
