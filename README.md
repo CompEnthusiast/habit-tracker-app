@@ -1,4 +1,10 @@
-# React + Vite
+# React + Vite - Habit Tracker
+
+## 📱 Android App (.apk) Download
+Download the latest Android release:
+- 📦 **[Download Habit Tracker APK (v1.0.0)](https://github.com/CompEnthusiast/habit-tracker-app/releases/tag/v1.0.0)**
+
+---
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
