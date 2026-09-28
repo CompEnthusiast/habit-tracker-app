@@ -67,3 +67,20 @@ export async function syncGoogleHabits(dateKey) {
   }
   return res.json();
 }
+
+export async function pushHabitsToGoogleTasks(dateKey) {
+  const timezoneOffset = new Date().getTimezoneOffset();
+  const res = await fetch(`${BASE}/push-tasks`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      dateKey,
+      timezoneOffset,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to push habits to Google Tasks');
+  }
+  return res.json();
+}

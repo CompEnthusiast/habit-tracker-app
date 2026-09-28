@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Calendar, CheckSquare, Activity, RefreshCw, Unlink, ExternalLink, CheckCircle2, AlertCircle } from 'lucide-react';
-import { getGoogleAuthUrl, getGoogleStatus, disconnectGoogle, syncGoogleHabits } from '../api/google';
+import { Calendar, CheckSquare, Activity, RefreshCw, Unlink, ExternalLink, CheckCircle2, AlertCircle, ListPlus } from 'lucide-react';
+import { getGoogleAuthUrl, getGoogleStatus, disconnectGoogle, syncGoogleHabits, pushHabitsToGoogleTasks } from '../api/google';
 
 export default function GoogleSyncPanel({ habits = [], onHabitsUpdated }) {
   const [status, setStatus] = useState({ connected: false, email: null, lastSync: null });
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [pushing, setPushing] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('info'); // 'info' | 'success' | 'error'
 
@@ -70,6 +71,22 @@ export default function GoogleSyncPanel({ habits = [], onHabitsUpdated }) {
     }
   };
 
+  const handlePushToGoogleTasks = async () => {
+    try {
+      setPushing(true);
+      const res = await pushHabitsToGoogleTasks();
+      if (res.success) {
+        setMessage(res.message || '✅ Habits pushed to Google Tasks!');
+        setMessageType('success');
+      }
+    } catch (err) {
+      setMessage(err.message || 'Failed to push habits to Google Tasks');
+      setMessageType('error');
+    } finally {
+      setPushing(false);
+    }
+  };
+
   const handleSync = async (showToast = true) => {
     try {
       setSyncing(true);
@@ -119,7 +136,7 @@ export default function GoogleSyncPanel({ habits = [], onHabitsUpdated }) {
                 <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${status.connected ? 'bg-emerald-400' : 'bg-blue-400'}`} />
                 <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${status.connected ? 'bg-emerald-500' : 'bg-blue-500'}`} />
               </span>
-              Google Auto-Sync
+              Google 2-Way Sync
             </span>
             <div className="flex items-center gap-1.5 text-xs text-gray-400 bg-white/5 px-2.5 py-0.5 rounded-full border border-white/5">
               <Calendar size={12} className="text-blue-400" title="Google Calendar" />
@@ -132,10 +149,10 @@ export default function GoogleSyncPanel({ habits = [], onHabitsUpdated }) {
           <p className="text-xs text-gray-400">
             {status.connected ? (
               <span>
-                Connected as <strong className="text-emerald-400 font-semibold">{status.email}</strong> • {syncHabitsCount} auto-synced habit{syncHabitsCount === 1 ? '' : 's'}
+                Connected as <strong className="text-emerald-400 font-semibold">{status.email}</strong> • Habits sync directly with Google Tasks list <code className="text-amber-300 bg-amber-400/10 px-1.5 py-0.5 rounded text-[11px]">🎯 Habit Tracker</code>
               </span>
             ) : (
-              <span>Connect Google to auto-mark habits done when events finish, tasks are checked, or fitness goals are met.</span>
+              <span>Connect Google to auto-push habits to your Google Tasks app and auto-complete them when checked off.</span>
             )}
           </p>
         </div>
@@ -145,16 +162,27 @@ export default function GoogleSyncPanel({ habits = [], onHabitsUpdated }) {
           {status.connected ? (
             <>
               <button
+                onClick={handlePushToGoogleTasks}
+                disabled={pushing || loading || syncing}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-amber-300 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 active:scale-95 transition-all disabled:opacity-50"
+                title="Send today's habits to your Google Tasks app"
+              >
+                <ListPlus size={14} className={pushing ? 'animate-bounce' : ''} />
+                {pushing ? 'Sending...' : '📤 Send to Google Tasks'}
+              </button>
+
+              <button
                 onClick={() => handleSync(true)}
-                disabled={syncing || loading}
+                disabled={syncing || loading || pushing}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 transition-all shadow-md disabled:opacity-50"
               >
                 <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-                {syncing ? 'Syncing...' : 'Sync Now'}
+                {syncing ? 'Syncing...' : 'Sync Status'}
               </button>
+
               <button
                 onClick={handleDisconnect}
-                disabled={loading || syncing}
+                disabled={loading || syncing || pushing}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-white/5 transition-all"
                 title="Disconnect Google Account"
               >

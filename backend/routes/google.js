@@ -21,7 +21,7 @@ function getOAuthClient(redirectUri) {
 
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
-  'https://www.googleapis.com/auth/tasks.readonly',
+  'https://www.googleapis.com/auth/tasks',
   'https://www.googleapis.com/auth/fitness.activity.read',
   'https://www.googleapis.com/auth/fitness.body.read',
   'https://www.googleapis.com/auth/userinfo.email',
@@ -424,6 +424,104 @@ router.post('/sync', protect, async (req, res) => {
     });
   } catch (err) {
     console.error('Sync error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/google/push-tasks — Export & push today's habits to Google Tasks
+router.post('/push-tasks', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user || !user.isGoogleConnected || !user.googleTokens) {
+      return res.status(400).json({ message: 'Google account is not connected' });
+    }
+
+    const oauth2Client = getOAuthClient();
+    oauth2Client.setCredentials(user.googleTokens);
+
+    const tasksApi = google.tasks({ version: 'v1', auth: oauth2Client });
+
+    // 1. Find or create a dedicated "🎯 Habit Tracker" list in Google Tasks
+    const taskListsRes = await tasksApi.tasklists.list({ maxResults: 50 });
+    let habitList = (taskListsRes.data.items || []).find(
+      (l) => l.title === '🎯 Habit Tracker' || l.title === 'Habit Tracker'
+    );
+
+    if (!habitList) {
+      const newListRes = await tasksApi.tasklists.insert({
+        requestBody: { title: '🎯 Habit Tracker' },
+      });
+      habitList = newListRes.data;
+    }
+
+    // 2. Get existing tasks in this list to avoid duplicates
+    const existingTasksRes = await tasksApi.tasks.list({
+      tasklist: habitList.id,
+      showCompleted: false,
+      maxResults: 100,
+    });
+    const existingTitles = new Set(
+      (existingTasksRes.data.items || []).map((t) => (t.title || '').toLowerCase().trim())
+    );
+
+    // 3. Date handling for today
+    const clientTzOffsetMin = req.body.timezoneOffset ? Number(req.body.timezoneOffset) : new Date().getTimezoneOffset();
+    const nowClient = new Date(Date.now() - clientTzOffsetMin * 60000);
+    const targetDateKey = req.body.dateKey || nowClient.toISOString().split('T')[0]; // "YYYY-MM-DD"
+    const dueIso = new Date(`${targetDateKey}T23:59:59.000Z`).toISOString();
+
+    // 4. Fetch all user habits
+    const habits = await Habit.find({ user: user._id });
+    let pushedCount = 0;
+    const pushedHabits = [];
+
+    for (const habit of habits) {
+      const habitNameClean = habit.name.trim();
+      const isCompletedToday = habit.completions && habit.completions.get(targetDateKey);
+
+      // Skip if already completed today in Habit Tracker or already exists in Google Tasks
+      if (isCompletedToday || existingTitles.has(habitNameClean.toLowerCase())) {
+        continue;
+      }
+
+      // Automatically enable Google Tasks sync on this habit if not configured
+      if (!habit.autoSync || habit.autoSync.source === 'none') {
+        habit.autoSync = {
+          enabled: true,
+          source: 'google_tasks',
+          keyword: habitNameClean,
+          fitMetric: 'steps',
+          targetValue: 10000,
+        };
+        await habit.save();
+      }
+
+      await tasksApi.tasks.insert({
+        tasklist: habitList.id,
+        requestBody: {
+          title: habitNameClean,
+          notes: `Category: ${habit.category} | Target: ${habit.targetPerWeek}d/week | Synced with Habit Tracker`,
+          due: dueIso,
+        },
+      });
+
+      existingTitles.add(habitNameClean.toLowerCase());
+      pushedCount++;
+      pushedHabits.push(habitNameClean);
+    }
+
+    res.json({
+      success: true,
+      pushedCount,
+      pushedHabits,
+      listTitle: habitList.title,
+      message:
+        pushedCount > 0
+          ? `Successfully added ${pushedCount} habit(s) to your Google Tasks under "${habitList.title}"!`
+          : `All habits are already in your Google Tasks or completed for today.`,
+    });
+  } catch (err) {
+    console.error('Push to Google Tasks error:', err);
     res.status(500).json({ message: err.message });
   }
 });
