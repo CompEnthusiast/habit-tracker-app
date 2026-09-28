@@ -1,9 +1,8 @@
 const rawUrl = import.meta.env.VITE_API_URL;
-const API_BASE = rawUrl
-  ? rawUrl.replace(/\/+$/, '')
-  : (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && !window.location.hostname.includes('vercel.app')
-      ? `http://${window.location.hostname}:5000`
-      : 'http://localhost:5000');
+const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+const API_BASE = (import.meta.env.DEV && isLocalhost)
+  ? 'http://localhost:5000'
+  : (rawUrl ? rawUrl.replace(/\/+$/, '') : 'http://localhost:5000');
 const BASE = `${API_BASE}/api`;
 
 function getToken() {

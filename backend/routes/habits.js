@@ -20,7 +20,8 @@ router.get('/', async (req, res) => {
       targetPerWeek: h.targetPerWeek,
       reminderEnabled: h.reminderEnabled,
       reminderTime: h.reminderTime,
-      completions: Object.fromEntries(h.completions),
+      autoSync: h.autoSync || { enabled: false, source: 'none', keyword: '', fitMetric: 'steps', targetValue: 10000 },
+      completions: Object.fromEntries(h.completions || new Map()),
     }));
     res.json(result);
   } catch (err) {
@@ -31,7 +32,7 @@ router.get('/', async (req, res) => {
 // POST /api/habits — create a new habit
 router.post('/', async (req, res) => {
   try {
-    const { name, category, color, targetPerWeek, reminderEnabled, reminderTime } = req.body;
+    const { name, category, color, targetPerWeek, reminderEnabled, reminderTime, autoSync } = req.body;
     const habit = await Habit.create({
       user: req.user._id,
       name,
@@ -40,6 +41,7 @@ router.post('/', async (req, res) => {
       targetPerWeek,
       reminderEnabled,
       reminderTime,
+      autoSync: autoSync || { enabled: false, source: 'none', keyword: '', fitMetric: 'steps', targetValue: 10000 },
     });
     res.status(201).json({
       _id: habit._id,
@@ -49,6 +51,7 @@ router.post('/', async (req, res) => {
       targetPerWeek: habit.targetPerWeek,
       reminderEnabled: habit.reminderEnabled,
       reminderTime: habit.reminderTime,
+      autoSync: habit.autoSync,
       completions: {},
     });
   } catch (err) {
@@ -59,7 +62,7 @@ router.post('/', async (req, res) => {
 // PATCH /api/habits/:id — update habit details
 router.patch('/:id', async (req, res) => {
   try {
-    const allowed = ['name', 'category', 'color', 'targetPerWeek', 'reminderEnabled', 'reminderTime'];
+    const allowed = ['name', 'category', 'color', 'targetPerWeek', 'reminderEnabled', 'reminderTime', 'autoSync'];
     const updates = Object.fromEntries(
       Object.entries(req.body).filter(([key]) => allowed.includes(key))
     );
@@ -77,7 +80,8 @@ router.patch('/:id', async (req, res) => {
       targetPerWeek: habit.targetPerWeek,
       reminderEnabled: habit.reminderEnabled,
       reminderTime: habit.reminderTime,
-      completions: Object.fromEntries(habit.completions),
+      autoSync: habit.autoSync,
+      completions: Object.fromEntries(habit.completions || new Map()),
     });
   } catch (err) {
     res.status(400).json({ message: err.message });

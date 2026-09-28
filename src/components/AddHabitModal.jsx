@@ -21,6 +21,10 @@ export default function AddHabitModal({ onClose, onAdd, onUpdate, editingHabit =
   const [targetPerWeek, setTargetPerWeek] = useState(editingHabit?.targetPerWeek || 7);
   const [reminderEnabled, setReminderEnabled] = useState(editingHabit?.reminderEnabled || false);
   const [reminderTime, setReminderTime] = useState(editingHabit?.reminderTime || '');
+  const [autoSyncSource, setAutoSyncSource] = useState(editingHabit?.autoSync?.source || 'none');
+  const [autoSyncKeyword, setAutoSyncKeyword] = useState(editingHabit?.autoSync?.keyword || '');
+  const [fitMetric, setFitMetric] = useState(editingHabit?.autoSync?.fitMetric || 'steps');
+  const [fitTargetValue, setFitTargetValue] = useState(editingHabit?.autoSync?.targetValue || 10000);
 
   useEffect(() => {
     setName(editingHabit?.name || '');
@@ -29,12 +33,30 @@ export default function AddHabitModal({ onClose, onAdd, onUpdate, editingHabit =
     setTargetPerWeek(editingHabit?.targetPerWeek || 7);
     setReminderEnabled(editingHabit?.reminderEnabled || false);
     setReminderTime(editingHabit?.reminderTime || '');
+    setAutoSyncSource(editingHabit?.autoSync?.source || 'none');
+    setAutoSyncKeyword(editingHabit?.autoSync?.keyword || '');
+    setFitMetric(editingHabit?.autoSync?.fitMetric || 'steps');
+    setFitTargetValue(editingHabit?.autoSync?.targetValue || 10000);
   }, [editingHabit]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
-    const data = { name: name.trim(), category, color, targetPerWeek: Number(targetPerWeek), reminderEnabled, reminderTime };
+    const data = {
+      name: name.trim(),
+      category,
+      color,
+      targetPerWeek: Number(targetPerWeek),
+      reminderEnabled,
+      reminderTime,
+      autoSync: {
+        enabled: autoSyncSource !== 'none',
+        source: autoSyncSource,
+        keyword: autoSyncKeyword.trim() || name.trim(),
+        fitMetric,
+        targetValue: Number(fitTargetValue),
+      },
+    };
     if (editingHabit) onUpdate(editingHabit._id, data);
     else onAdd(data);
     onClose();
@@ -144,6 +166,7 @@ export default function AddHabitModal({ onClose, onAdd, onUpdate, editingHabit =
               </div>
             </div>
 
+            {/* Target & Reminder */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="target-per-week" className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">
@@ -177,6 +200,88 @@ export default function AddHabitModal({ onClose, onAdd, onUpdate, editingHabit =
                   Enable reminder
                 </label>
               </div>
+            </div>
+
+            {/* Google Auto-Sync Section */}
+            <div className="p-4 rounded-2xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-xs font-semibold text-gray-300 uppercase tracking-widest flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-blue-400" />
+                  Auto-Sync with Google
+                </label>
+                <span className="text-[10px] text-gray-500">Optional</span>
+              </div>
+
+              {/* Source selection */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-3">
+                {[
+                  { id: 'none', label: 'Manual' },
+                  { id: 'google_calendar', label: 'Calendar' },
+                  { id: 'google_tasks', label: 'Tasks' },
+                  { id: 'google_fit', label: 'Google Fit' },
+                ].map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setAutoSyncSource(s.id)}
+                    className={`px-2.5 py-2 rounded-xl text-xs font-medium transition-all text-center ${
+                      autoSyncSource === s.id
+                        ? 'bg-blue-600/30 text-blue-300 border border-blue-500/50 shadow-sm'
+                        : 'text-gray-500 border border-white/5 hover:border-white/15 hover:text-gray-300'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Conditional Inputs */}
+              {(autoSyncSource === 'google_calendar' || autoSyncSource === 'google_tasks') && (
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-400 mb-1">
+                    Matching Keyword in {autoSyncSource === 'google_calendar' ? 'Calendar Event' : 'Task Title'}
+                  </label>
+                  <input
+                    type="text"
+                    value={autoSyncKeyword}
+                    onChange={(e) => setAutoSyncKeyword(e.target.value)}
+                    placeholder={name || 'e.g. Gym, Read, Meditation'}
+                    className="w-full px-3 py-2 rounded-xl text-white text-xs border border-white/10 outline-none focus:border-blue-500 transition-all"
+                    style={{ background: '#1c1c28' }}
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Marks habit done when a matching {autoSyncSource === 'google_calendar' ? 'event' : 'task'} is recorded today.
+                  </p>
+                </div>
+              )}
+
+              {autoSyncSource === 'google_fit' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-400 mb-1">Metric</label>
+                    <select
+                      value={fitMetric}
+                      onChange={(e) => setFitMetric(e.target.value)}
+                      className="w-full px-2.5 py-2 rounded-xl text-white text-xs border border-white/10 outline-none focus:border-blue-500"
+                      style={{ background: '#1c1c28' }}
+                    >
+                      <option value="steps">Steps</option>
+                      <option value="active_minutes">Active Workout (mins)</option>
+                      <option value="calories">Calories Burned (kcal)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-400 mb-1">Target</label>
+                    <input
+                      type="number"
+                      value={fitTargetValue}
+                      onChange={(e) => setFitTargetValue(e.target.value)}
+                      className="w-full px-2.5 py-2 rounded-xl text-white text-xs border border-white/10 outline-none focus:border-blue-500"
+                      style={{ background: '#1c1c28' }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Submit */}

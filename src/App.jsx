@@ -11,6 +11,7 @@ import ExportMenu from './components/ExportMenu';
 import HealthTicker from './components/HealthTicker';
 import Achievements from './components/Achievements';
 import ReminderPanel from './components/ReminderPanel';
+import GoogleSyncPanel from './components/GoogleSyncPanel';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -195,6 +196,11 @@ function Dashboard() {
           totalHabits={totalPossible}
           progress={progress}
           onAddHabit={() => setShowModal(true)}
+        />
+
+        <GoogleSyncPanel
+          habits={habits}
+          onHabitsUpdated={(updated) => setHabits(updated)}
         />
 
         <div className="dashboard-tools">

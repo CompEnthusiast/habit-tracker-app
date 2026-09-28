@@ -12,8 +12,22 @@ const habitSchema = new mongoose.Schema({
   targetPerWeek: { type: Number, min: 1, max: 7, default: 7 },
   reminderEnabled: { type: Boolean, default: false },
   reminderTime: { type: String, default: '' },
-  // days: { "1": true, "15": true, ... } keyed by "YYYY-MM-DD-day" or just day number per month
-  // Store as map of "YYYY-MM": { "1": true, "5": true }
+  autoSync: {
+    enabled: { type: Boolean, default: false },
+    source: {
+      type: String,
+      enum: ['none', 'google_calendar', 'google_tasks', 'google_fit'],
+      default: 'none',
+    },
+    keyword: { type: String, default: '', trim: true },
+    fitMetric: {
+      type: String,
+      enum: ['steps', 'active_minutes', 'calories', 'distance'],
+      default: 'steps',
+    },
+    targetValue: { type: Number, default: 10000 },
+  },
+  // days: { "YYYY-MM-DD": true, ... }
   completions: {
     type: Map,
     of: Boolean,

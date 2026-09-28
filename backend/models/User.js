@@ -16,6 +16,22 @@ const userSchema = new mongoose.Schema({
   habitsData: {
     type: String, // We'll store stringified JSON for simplicity for now
     default: null
+  },
+  googleTokens: {
+    type: Object,
+    default: null
+  },
+  googleEmail: {
+    type: String,
+    default: null
+  },
+  isGoogleConnected: {
+    type: Boolean,
+    default: false
+  },
+  lastGoogleSync: {
+    type: Date,
+    default: null
   }
 });
 
