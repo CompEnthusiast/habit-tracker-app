@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { UserPlus, Mail, Lock, Sparkles } from 'lucide-react';
+import { UserPlus, Mail, Lock } from 'lucide-react';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -29,52 +29,62 @@ export default function Register() {
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4"
-      style={{
-        background: 'radial-gradient(ellipse at 70% 20%, rgba(168,85,247,0.15) 0%, transparent 50%), radial-gradient(ellipse at 30% 80%, rgba(99,102,241,0.12) 0%, transparent 50%), #12121c',
-      }}
+      style={{ background: '#100E0C' }}
     >
-      <div className="w-full max-w-md">
+      {/* Grid texture */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-5"
+        style={{
+          backgroundImage: 'linear-gradient(#FF7A00 1px, transparent 1px), linear-gradient(90deg, #FF7A00 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+        }}
+      />
+
+      <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="flex justify-center mb-8">
           <div
-            className="flex items-center gap-3 px-5 py-3 rounded-2xl border border-white/10"
-            style={{ background: 'rgba(168,85,247,0.1)' }}
+            className="flex items-center gap-3 px-5 py-3 border-2 border-[#FF7A00] bg-[#1E1D1C]"
+            style={{ boxShadow: '4px 4px 0px #FF7A00' }}
           >
-            <Sparkles size={20} className="text-secondary" />
-            <span className="font-bold text-white tracking-wide">HabitFlow</span>
+            <div className="w-2 h-6 bg-[#FF7A00]" />
+            <span className="font-black text-white tracking-widest text-lg font-mono uppercase">
+              HABIT<span className="text-[#FF7A00]">FLOW</span>
+            </span>
           </div>
         </div>
 
         {/* Card */}
         <div
-          className="rounded-3xl border border-white/8 shadow-2xl p-8"
-          style={{
-            background: 'linear-gradient(135deg, #1e1e2e 0%, #252535 100%)',
-            boxShadow: '0 0 80px rgba(168,85,247,0.15)',
-          }}
+          className="bg-[#1E1D1C] border-2 border-[#FF7A00] p-8"
+          style={{ boxShadow: '6px 6px 0px #FF7A00' }}
         >
-          <div className="mb-8">
-            <h2 className="text-2xl font-extrabold text-white mb-1">Create account</h2>
-            <p className="text-gray-500 text-sm">Start building better habits today</p>
+          {/* Title */}
+          <div className="mb-7 border-b-2 border-[#FF7A00]/30 pb-4">
+            <h2 className="text-2xl font-black text-white uppercase tracking-widest font-mono">CREATE ACCOUNT</h2>
+            <p className="text-[#FF7A00] text-[10px] uppercase tracking-widest font-mono mt-1">
+              // BUILD CONSISTENT HABITS TODAY
+            </p>
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 bg-danger/10 border border-danger/20 text-danger px-4 py-3 rounded-xl mb-6 text-sm">
-              ⚠️ {error}
+            <div className="flex items-center gap-2 border-2 border-[#FF4444] bg-[#FF4444]/10 text-[#FF4444] px-4 py-3 mb-6 text-xs font-mono uppercase">
+              ⚠ {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Email</label>
+              <label className="block text-[10px] font-black text-[#FF7A00] uppercase tracking-widest mb-1.5 font-mono">
+                // EMAIL
+              </label>
               <div className="relative">
-                <Mail size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" />
+                <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#737373]" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3.5 rounded-xl text-white text-sm border border-white/8 outline-none focus:border-secondary/50 transition-all"
-                  style={{ background: 'rgba(255,255,255,0.04)' }}
+                  className="w-full pl-10 pr-4 py-3 text-white text-sm bg-[#100E0C] border-2 border-[#494848] outline-none focus:border-[#FF7A00] placeholder-[#737373] font-mono transition-all"
                   placeholder="you@example.com"
                   required
                 />
@@ -82,15 +92,16 @@ export default function Register() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Password</label>
+              <label className="block text-[10px] font-black text-[#FF7A00] uppercase tracking-widest mb-1.5 font-mono">
+                // PASSWORD
+              </label>
               <div className="relative">
-                <Lock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" />
+                <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#737373]" />
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3.5 rounded-xl text-white text-sm border border-white/8 outline-none focus:border-secondary/50 transition-all"
-                  style={{ background: 'rgba(255,255,255,0.04)' }}
+                  className="w-full pl-10 pr-4 py-3 text-white text-sm bg-[#100E0C] border-2 border-[#494848] outline-none focus:border-[#FF7A00] placeholder-[#737373] font-mono transition-all"
                   placeholder="Min 6 characters"
                   required
                 />
@@ -98,15 +109,16 @@ export default function Register() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Confirm Password</label>
+              <label className="block text-[10px] font-black text-[#FF7A00] uppercase tracking-widest mb-1.5 font-mono">
+                // CONFIRM PASSWORD
+              </label>
               <div className="relative">
-                <Lock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" />
+                <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#737373]" />
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3.5 rounded-xl text-white text-sm border border-white/8 outline-none focus:border-secondary/50 transition-all"
-                  style={{ background: 'rgba(255,255,255,0.04)' }}
+                  className="w-full pl-10 pr-4 py-3 text-white text-sm bg-[#100E0C] border-2 border-[#494848] outline-none focus:border-[#FF7A00] placeholder-[#737373] font-mono transition-all"
                   placeholder="••••••••"
                   required
                 />
@@ -116,21 +128,18 @@ export default function Register() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-4 rounded-xl font-bold text-white transition-all duration-200 hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{
-                background: 'linear-gradient(135deg, #a855f7, #6366f1)',
-                boxShadow: '0 8px 32px rgba(168,85,247,0.4)',
-              }}
+              className="w-full flex items-center justify-center gap-2 py-3.5 font-black text-[#100E0C] bg-[#FF7A00] border-2 border-[#FF7A00] uppercase tracking-widest text-sm transition-all hover:bg-[#FFA64D] active:translate-x-[2px] active:translate-y-[2px] disabled:opacity-50 disabled:cursor-not-allowed mt-2 font-mono"
+              style={{ boxShadow: '4px 4px 0px #000' }}
             >
-              <UserPlus size={16} />
-              {loading ? 'Creating account…' : 'Create Account'}
+              <UserPlus size={15} />
+              {loading ? 'CREATING…' : 'CREATE ACCOUNT'}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-gray-600 text-sm">
+          <p className="mt-6 text-center text-[#C1C1C1] text-[11px] font-mono uppercase tracking-wider">
             Already have an account?{' '}
-            <Link to="/login" className="text-secondary font-semibold hover:underline">
-              Sign in
+            <Link to="/login" className="text-[#FF7A00] font-black hover:underline">
+              SIGN IN →
             </Link>
           </p>
         </div>

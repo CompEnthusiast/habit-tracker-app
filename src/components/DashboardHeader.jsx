@@ -1,80 +1,145 @@
-import { CheckCircle2, TrendingUp, Calendar as CalendarIcon, LogOut, Plus } from 'lucide-react';
+import {
+  CheckCircle2,
+  TrendingUp,
+  Calendar as CalendarIcon,
+  LogOut,
+  Plus,
+  History,
+  Timer,
+  Keyboard,
+  Sun,
+  Moon,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import SyncStatusBadge from './SyncStatusBadge';
 
-export default function DashboardHeader({ currentMonth, completedHabits, totalHabits, progress, onAddHabit }) {
+export default function DashboardHeader({
+  currentMonth,
+  completedHabits,
+  totalHabits,
+  progress,
+  onAddHabit,
+  onOpenHistory,
+  onOpenPomodoro,
+  onOpenShortcuts,
+  isOnline,
+  syncStatus,
+  lastSyncTime,
+  onSyncNow,
+  pendingCount = 0,
+}) {
   const { logout, user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   return (
-    <div
-      className="flex flex-col md:flex-row justify-between items-start md:items-center gap-5 p-6 rounded-3xl border border-white/5 shadow-2xl"
-      style={{ background: 'linear-gradient(135deg, #1e1e2e 0%, #252535 100%)' }}
-    >
-      {/* Left: Month + user */}
-      <div className="flex items-center gap-4">
-        <div
-          className="p-3.5 rounded-2xl"
-          style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.25), rgba(168,85,247,0.25))' }}
-        >
-          <CalendarIcon size={26} className="text-secondary" />
+    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 p-5 border-2 border-[#494848] bg-[#1E1D1C] shadow-[5px_5px_0px_#000000]">
+      {/* Left: Title + User info + Sync Badge */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="p-3 border-2 border-black bg-[#FF7A00] shadow-[3px_3px_0px_#000000] shrink-0 transition-all hover:shadow-[5px_5px_0px_#000] hover:-translate-x-px hover:-translate-y-px">
+          <CalendarIcon size={24} className="text-black" />
         </div>
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-white">{currentMonth} Tracker</h1>
-          <p className="text-sm text-gray-500">
-            👋 Welcome back, <span className="text-gray-300 font-medium">{user?.email?.split('@')[0] || 'User'}</span>
-          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white leading-none font-mono">
+              {currentMonth} TRACKER
+            </h1>
+            <span className="brutal-badge brutal-badge-orange font-mono">ACTIVE</span>
+          </div>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <p className="text-[11px] font-mono text-[#C1C1C1]">
+              USER: <span className="text-white font-bold">{user?.email?.split('@')[0] || 'User'}</span>
+            </p>
+            <SyncStatusBadge
+              isOnline={isOnline}
+              syncStatus={syncStatus}
+              lastSyncTime={lastSyncTime}
+              onSyncNow={onSyncNow}
+              pendingCount={pendingCount}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Right: Stats + buttons */}
-      <div className="flex flex-wrap gap-3 w-full md:w-auto">
-        {/* Completed */}
-        <div
-          className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-white/5 flex-1 md:flex-none"
-          style={{ background: 'rgba(34,197,94,0.07)' }}
-        >
-          <CheckCircle2 size={18} className="text-success shrink-0" />
+      {/* Right: Stats + Quick Tool Action Buttons */}
+      <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+        {/* Completed stat */}
+        <div className="brutal-stat-card flex items-center gap-2.5 px-3 py-2 border-2 border-[#494848] bg-[#100E0C] shadow-[2px_2px_0px_#000000]">
+          <CheckCircle2 size={16} className="text-[#FF7A00] shrink-0" />
           <div>
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Done</p>
-            <p className="text-lg font-bold text-white leading-none">
+            <p className="text-[9px] text-[#C1C1C1] font-mono font-bold uppercase tracking-wider leading-none">DONE</p>
+            <p className="text-base font-black text-white leading-tight font-mono">
               {completedHabits}
-              <span className="text-xs text-gray-600 font-normal ml-1">/ {totalHabits}</span>
+              <span className="text-xs text-[#C1C1C1] font-normal ml-0.5">/{totalHabits}</span>
             </p>
           </div>
         </div>
 
-        {/* Progress */}
-        <div
-          className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-white/5 flex-1 md:flex-none"
-          style={{ background: 'rgba(245,158,11,0.07)' }}
-        >
-          <TrendingUp size={18} className="text-accent3 shrink-0" />
+        {/* Progress stat */}
+        <div className="brutal-stat-card flex items-center gap-2.5 px-3 py-2 border-2 border-[#494848] bg-[#100E0C] shadow-[2px_2px_0px_#000000]">
+          <TrendingUp size={16} className="text-[#FF7A00] shrink-0" />
           <div>
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Progress</p>
-            <p className="text-lg font-bold text-white leading-none">{progress.toFixed(1)}%</p>
+            <p className="text-[9px] text-[#C1C1C1] font-mono font-bold uppercase tracking-wider leading-none">RATE</p>
+            <p className="text-base font-black text-[#FF7A00] leading-tight font-mono tabular-nums">
+              {progress.toFixed(0)}%
+            </p>
           </div>
         </div>
 
-        {/* Add habit */}
+        {/* History Modal Button */}
+        <button
+          onClick={onOpenHistory}
+          className="brutal-btn brutal-btn-ghost px-3 py-2 text-xs font-mono"
+          title="Browse locked past days history"
+        >
+          <History size={14} className="text-[#FF7A00]" />
+          <span className="hidden sm:inline">HISTORY</span>
+        </button>
+
+        {/* Pomodoro Timer Button */}
+        <button
+          onClick={onOpenPomodoro}
+          className="brutal-btn brutal-btn-ghost px-3 py-2 text-xs font-mono"
+          title="Open Focus Pomodoro Timer"
+        >
+          <Timer size={14} className="text-[#FFA64D]" />
+          <span className="hidden sm:inline">FOCUS</span>
+        </button>
+
+        {/* Shortcuts Help Button */}
+        <button
+          onClick={onOpenShortcuts}
+          className="brutal-btn brutal-btn-ghost px-2.5 py-2 text-xs font-mono"
+          title="Keyboard shortcuts (?)"
+        >
+          <Keyboard size={14} className="text-[#C1C1C1]" />
+        </button>
+
+        {/* Theme Toggle Button */}
+        <button
+          onClick={toggleTheme}
+          className="brutal-btn brutal-btn-ghost px-2.5 py-2 text-xs"
+          title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
+        >
+          {theme === 'dark' ? <Sun size={14} className="text-[#FFA64D]" /> : <Moon size={14} className="text-white" />}
+        </button>
+
+        {/* Add Habit */}
         <button
           onClick={onAddHabit}
-          className="flex items-center gap-2 px-5 py-3 rounded-2xl font-semibold text-white text-sm transition-all hover:scale-105 active:scale-95"
-          style={{
-            background: 'linear-gradient(135deg, #a855f7, #6366f1)',
-            boxShadow: '0 6px 24px rgba(168,85,247,0.4)',
-          }}
+          className="brutal-btn brutal-btn-primary px-4 py-2 text-xs font-mono"
         >
-          <Plus size={16} />
-          Add Habit
+          <Plus size={15} strokeWidth={3} />
+          <span>ADD HABIT</span>
         </button>
 
         {/* Logout */}
         <button
           onClick={logout}
-          className="flex items-center gap-2 px-4 py-3 rounded-2xl font-semibold text-danger text-sm border border-danger/20 hover:bg-danger/10 transition-all"
+          className="brutal-btn brutal-btn-ghost px-3 py-2 text-xs hover:text-[#FF4444] hover:border-[#FF4444] hover:!shadow-[3px_3px_0px_#FF4444]"
           title="Logout"
         >
-          <LogOut size={16} />
-          <span className="hidden md:inline">Logout</span>
+          <LogOut size={14} />
         </button>
       </div>
     </div>

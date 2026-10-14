@@ -51,15 +51,21 @@ export async function disconnectGoogle() {
   return res.json();
 }
 
-export async function syncGoogleHabits(dateKey) {
+export async function syncGoogleHabits(options = {}) {
   const timezoneOffset = new Date().getTimezoneOffset();
+  const payload = typeof options === 'string'
+    ? { dateKey: options, timezoneOffset }
+    : {
+        dateKey: options.dateKey,
+        daysBack: options.daysBack || 7,
+        autoPush: options.autoPush !== undefined ? options.autoPush : true,
+        timezoneOffset,
+      };
+
   const res = await fetch(`${BASE}/sync`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({
-      dateKey,
-      timezoneOffset,
-    }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -84,3 +90,29 @@ export async function pushHabitsToGoogleTasks(dateKey) {
   }
   return res.json();
 }
+
+export async function updateGoogleSettings(settings) {
+  const res = await fetch(`${BASE}/settings`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(settings),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to update Google settings');
+  }
+  return res.json();
+}
+
+export async function clearGoogleSyncHistory() {
+  const res = await fetch(`${BASE}/history`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to clear sync history');
+  }
+  return res.json();
+}
+

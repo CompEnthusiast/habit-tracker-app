@@ -32,7 +32,22 @@ const userSchema = new mongoose.Schema({
   lastGoogleSync: {
     type: Date,
     default: null
-  }
+  },
+  syncSettings: {
+    autoPushDailyTasks: { type: Boolean, default: true },
+    autoSyncIntervalMins: { type: Number, default: 15 },
+    syncPastDaysCount: { type: Number, default: 7 }
+  },
+  syncLogs: [
+    {
+      dateKey: { type: String, required: true },
+      habitName: { type: String, required: true },
+      source: { type: String, required: true }, // 'google_tasks', 'google_calendar', 'google_fit'
+      action: { type: String, default: 'completed' }, // 'completed', 'assigned'
+      details: { type: String, default: '' },
+      timestamp: { type: Date, default: Date.now }
+    }
+  ]
 });
 
 // Hash password before saving
