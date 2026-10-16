@@ -10,6 +10,7 @@
     "mobile:open": "npx cap open android",
     "mobile:run": "npx cap run android",
     "lint": "oxlint",
+    "test": "node src/tests/runTests.js",
     "preview": "vite preview"
   },
   "dependencies": {

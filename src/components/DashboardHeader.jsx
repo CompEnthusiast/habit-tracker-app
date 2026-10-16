@@ -9,6 +9,11 @@ import {
   Keyboard,
   Sun,
   Moon,
+  Bot,
+  Headphones,
+  Mic,
+  Smile,
+  Settings,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -23,6 +28,11 @@ export default function DashboardHeader({
   onOpenHistory,
   onOpenPomodoro,
   onOpenShortcuts,
+  onOpenAICoach,
+  onOpenAmbience,
+  onOpenVoice,
+  onOpenMood,
+  onOpenSettings,
   isOnline,
   syncStatus,
   lastSyncTime,
@@ -105,6 +115,65 @@ export default function DashboardHeader({
           <Timer size={14} className="text-[#FFA64D]" />
           <span className="hidden sm:inline">FOCUS</span>
         </button>
+
+        {/* AI Habit Coach */}
+        {onOpenAICoach && (
+          <button
+            onClick={onOpenAICoach}
+            className="brutal-btn brutal-btn-ghost px-2.5 py-2 text-xs font-mono text-[#FF7A00]"
+            title="Open AI Habit Coach & Predictive Analytics"
+          >
+            <Bot size={15} />
+            <span className="hidden xl:inline">AI COACH</span>
+          </button>
+        )}
+
+        {/* Focus Ambience Audio & Pomodoro */}
+        {onOpenAmbience && (
+          <button
+            onClick={onOpenAmbience}
+            className="brutal-btn brutal-btn-ghost px-2.5 py-2 text-xs font-mono"
+            title="Focus Audio Ambience (Rain, Lo-Fi, Binaural)"
+          >
+            <Headphones size={15} className="text-amber-400" />
+            <span className="hidden xl:inline">AUDIO</span>
+          </button>
+        )}
+
+        {/* Voice Check-ins */}
+        {onOpenVoice && (
+          <button
+            onClick={onOpenVoice}
+            className="brutal-btn brutal-btn-ghost px-2.5 py-2 text-xs font-mono"
+            title="Voice Check-in & Speech Assistant (V)"
+          >
+            <Mic size={15} className="text-rose-400" />
+            <span className="hidden xl:inline">VOICE</span>
+          </button>
+        )}
+
+        {/* Mood Tracker */}
+        {onOpenMood && (
+          <button
+            onClick={onOpenMood}
+            className="brutal-btn brutal-btn-ghost px-2.5 py-2 text-xs font-mono"
+            title="Log Mood & Correlation Analytics (M)"
+          >
+            <Smile size={15} className="text-emerald-400" />
+            <span className="hidden xl:inline">MOOD</span>
+          </button>
+        )}
+
+        {/* Settings Modal Button */}
+        {onOpenSettings && (
+          <button
+            onClick={onOpenSettings}
+            className="brutal-btn brutal-btn-ghost px-2.5 py-2 text-xs font-mono"
+            title="Settings & Data Management"
+          >
+            <Settings size={15} className="text-stone-300" />
+          </button>
+        )}
 
         {/* Shortcuts Help Button */}
         <button

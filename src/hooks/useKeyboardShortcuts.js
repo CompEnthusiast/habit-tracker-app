@@ -21,6 +21,10 @@ export function useKeyboardShortcuts({
   onRedo,
   onToggleTheme,
   onEscape,
+  onFlowMode,
+  onMoodTracker,
+  onVoiceCheckin,
+  onAmbienceAudio,
   enabled = true,
 }) {
   const [showHelp, setShowHelp] = useState(false);
@@ -70,6 +74,22 @@ export function useKeyboardShortcuts({
           e.preventDefault();
           onFocusSearch?.();
           break;
+        case 'f':
+          e.preventDefault();
+          onFlowMode?.();
+          break;
+        case 'm':
+          e.preventDefault();
+          onMoodTracker?.();
+          break;
+        case 'v':
+          e.preventDefault();
+          onVoiceCheckin?.();
+          break;
+        case 'a':
+          e.preventDefault();
+          onAmbienceAudio?.();
+          break;
         case 'd':
           e.preventDefault();
           onToggleTheme?.();
@@ -82,7 +102,20 @@ export function useKeyboardShortcuts({
           break;
       }
     },
-    [enabled, onNewTask, onToggleFocused, onFocusSearch, onUndo, onRedo, onToggleTheme, onEscape]
+    [
+      enabled,
+      onNewTask,
+      onToggleFocused,
+      onFocusSearch,
+      onUndo,
+      onRedo,
+      onToggleTheme,
+      onEscape,
+      onFlowMode,
+      onMoodTracker,
+      onVoiceCheckin,
+      onAmbienceAudio
+    ]
   );
 
   useEffect(() => {
@@ -95,9 +128,13 @@ export function useKeyboardShortcuts({
 
 /** Shortcut definitions for the help modal */
 export const SHORTCUTS = [
-  { key: 'N', label: 'New Task' },
+  { key: 'N', label: 'New Task / Habit' },
   { key: 'Space', label: 'Toggle Focused Task' },
   { key: '/', label: 'Focus Search' },
+  { key: 'F', label: 'Launch Guided Flow Mode' },
+  { key: 'M', label: 'Open Mood Tracker' },
+  { key: 'V', label: 'Open Voice Check-in' },
+  { key: 'A', label: 'Open Focus Ambience Mixer' },
   { key: 'D', label: 'Toggle Dark/Light Mode' },
   { key: 'Ctrl+Z', label: 'Undo' },
   { key: 'Ctrl+Shift+Z', label: 'Redo' },

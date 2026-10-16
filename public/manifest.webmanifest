@@ -1,17 +1,41 @@
 {
-  "name": "Habit Tracker",
-  "short_name": "Habits",
+  "name": "Habit RPG | Neo-Brutalist Habit Tracker",
+  "short_name": "HabitRPG",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#12121c",
-  "theme_color": "#12121c",
-  "description": "Track habits, streaks, goals, and daily progress.",
+  "orientation": "portrait-primary",
+  "background_color": "#100E0C",
+  "theme_color": "#FF7A00",
+  "description": "Gamified, offline-first habit tracker with RPG leveling, routines, AI coaching, and binaural audio.",
   "icons": [
     {
       "src": "/favicon.svg",
-      "sizes": "any",
+      "sizes": "192x192 512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add New Task",
+      "short_name": "New Task",
+      "description": "Quickly add a new habit or task",
+      "url": "/dashboard?action=new",
+      "icons": [{ "src": "/favicon.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "Start Routine",
+      "short_name": "Routines",
+      "description": "Launch guided flow mode",
+      "url": "/dashboard?action=routine",
+      "icons": [{ "src": "/favicon.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "Log Daily Mood",
+      "short_name": "Log Mood",
+      "description": "Track your mood and energy level",
+      "url": "/dashboard?action=mood",
+      "icons": [{ "src": "/favicon.svg", "sizes": "96x96" }]
     }
   ]
 }

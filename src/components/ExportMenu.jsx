@@ -2,10 +2,27 @@ import { useState, useRef, useEffect } from 'react';
 import { Download, FileSpreadsheet, FileText, ChevronDown, Calendar, CheckSquare } from 'lucide-react';
 import { exportToExcel, exportToPDF } from '../utils/exportData';
 
-export default function ExportMenu({ habits, monthDaysMap, daysInMonth, monthName, year, currentDay }) {
+export default function ExportMenu({
+  habits = [],
+  monthDaysMap = {},
+  daysInMonth = 31,
+  monthName = 'Current',
+  year = new Date().getFullYear(),
+  currentDay = new Date().getDate(),
+  moodStats = { great: 10, good: 6, neutral: 3, tough: 1 },
+  userXP = 1250,
+  userLevel = 4,
+}) {
   const [open, setOpen] = useState(false);
   const [exporting, setExporting] = useState(null);
-  const [pdfRange, setPdfRange] = useState('month'); // 'today' | 'week' | 'month'
+  const [pdfRange, setPdfRange] = useState('month'); // 'today' | 'week' | 'month' | 'custom'
+  const [customStart, setCustomStart] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().slice(0, 10);
+  });
+  const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().slice(0, 10));
+
   const ref = useRef(null);
 
   useEffect(() => {
@@ -27,6 +44,11 @@ export default function ExportMenu({ habits, monthDaysMap, daysInMonth, monthNam
       year,
       currentDay: currentDay || new Date().getDate(),
       dateRangeType: pdfRange,
+      customStartDate: customStart,
+      customEndDate: customEnd,
+      moodStats,
+      userXP,
+      userLevel,
     };
     await new Promise((r) => setTimeout(r, 120));
     if (type === 'excel') exportToExcel(params);
@@ -55,7 +77,7 @@ export default function ExportMenu({ habits, monthDaysMap, daysInMonth, monthNam
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-2 w-64 border-2 border-[#FF7A00] bg-[#1E1D1C] overflow-hidden z-50 p-2 space-y-2 shadow-[4px_4px_0px_#FF7A00]"
+          className="absolute right-0 top-full mt-2 w-72 border-2 border-[#FF7A00] bg-[#1E1D1C] overflow-hidden z-50 p-2.5 space-y-2.5 shadow-[4px_4px_0px_#FF7A00]"
         >
           {/* PDF Range Selector */}
           <div className="p-2 border border-[#494848] bg-[#100E0C]">
@@ -63,11 +85,12 @@ export default function ExportMenu({ habits, monthDaysMap, daysInMonth, monthNam
               <Calendar size={11} />
               PDF RANGE SELECTOR
             </p>
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-4 gap-1">
               {[
                 { id: 'today', label: 'Today' },
-                { id: 'week', label: '7 Days' },
+                { id: 'week', label: '7D' },
                 { id: 'month', label: 'Month' },
+                { id: 'custom', label: 'Custom' },
               ].map((r) => (
                 <button
                   key={r.id}
@@ -83,6 +106,30 @@ export default function ExportMenu({ habits, monthDaysMap, daysInMonth, monthNam
                 </button>
               ))}
             </div>
+
+            {/* Custom Range Picker */}
+            {pdfRange === 'custom' && (
+              <div className="mt-2 pt-2 border-t border-[#494848] space-y-1.5">
+                <div className="flex items-center justify-between text-[9px] font-mono text-[#C1C1C1]">
+                  <span>START:</span>
+                  <input
+                    type="date"
+                    value={customStart}
+                    onChange={(e) => setCustomStart(e.target.value)}
+                    className="bg-[#1E1D1C] border border-[#494848] text-white px-1.5 py-0.5 text-[9px] font-mono outline-none focus:border-[#FF7A00]"
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[9px] font-mono text-[#C1C1C1]">
+                  <span>END:</span>
+                  <input
+                    type="date"
+                    value={customEnd}
+                    onChange={(e) => setCustomEnd(e.target.value)}
+                    className="bg-[#1E1D1C] border border-[#494848] text-white px-1.5 py-0.5 text-[9px] font-mono outline-none focus:border-[#FF7A00]"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1">
@@ -95,7 +142,7 @@ export default function ExportMenu({ habits, monthDaysMap, daysInMonth, monthNam
               </div>
               <div>
                 <p className="text-xs font-black text-white uppercase font-mono">EXPORT PDF REPORT</p>
-                <p className="text-[9px] text-[#C1C1C1] font-mono">Neo-Brutalist ({pdfRange})</p>
+                <p className="text-[9px] text-[#C1C1C1] font-mono">Neo-Brutalist ({pdfRange.toUpperCase()})</p>
               </div>
             </button>
 
@@ -108,7 +155,7 @@ export default function ExportMenu({ habits, monthDaysMap, daysInMonth, monthNam
               </div>
               <div>
                 <p className="text-xs font-black text-white uppercase font-mono">EXPORT EXCEL (.XLSX)</p>
-                <p className="text-[9px] text-[#C1C1C1] font-mono">Full spreadsheet & breakdown</p>
+                <p className="text-[9px] text-[#C1C1C1] font-mono">Full monthly spreadsheet</p>
               </div>
             </button>
           </div>

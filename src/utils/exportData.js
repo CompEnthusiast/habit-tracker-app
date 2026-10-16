@@ -1,28 +1,31 @@
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 
-// ─── UI THEME COLORS (matching Neo-Brutalist Orange/Black UI) ────────────────
+// ─── NEO-BRUTALIST PALETTE ────────────────────────────────────────────────────
 const PALETTE = {
-  bg:         { r: 16,  g: 14,  b: 12  }, // #100E0C dark canvas
-  cardBg:     { r: 30,  g: 29,  b: 28  }, // #1E1D1C card surface
-  cardInner:  { r: 24,  g: 22,  b: 20  }, // #181614 inner block
-  orange:     { r: 255, g: 122, b: 0   }, // #FF7A00 electric orange
-  orangeDim:  { r: 204, g: 82,  b: 0   }, // #CC5200 deep ember
-  orangeAmber:{ r: 255, g: 166, b: 77  }, // #FFA64D warm amber
-  textWhite:  { r: 255, g: 255, b: 255 },
-  textDim:    { r: 193, g: 193, b: 193 }, // #C1C1C1 mono gray
-  textMuted:  { r: 115, g: 115, b: 115 }, // #737373 dark gray
-  border:     { r: 73,  g: 72,  b: 72  }, // #494848 solid border
-  borderDark: { r: 0,   g: 0,   b: 0   }, // #000000 shadow border
+  bg:          { r: 16,  g: 14,  b: 12  }, // #100E0C Dark canvas
+  cardBg:      { r: 30,  g: 29,  b: 28  }, // #1E1D1C Card surface
+  cardInner:   { r: 24,  g: 22,  b: 20  }, // #181614 Inner container
+  cardElevated:{ r: 38,  g: 36,  b: 34  }, // #262422 Elevated box
+  orange:      { r: 255, g: 122, b: 0   }, // #FF7A00 Electric orange
+  orangeDim:   { r: 204, g: 82,  b: 0   }, // #CC5200 Deep amber
+  amber:       { r: 255, g: 166, b: 77  }, // #FFA64D Warm amber
+  gold:        { r: 255, g: 184, b: 0   }, // #FFB800 Solar gold
+  white:       { r: 255, g: 255, b: 255 },
+  silver:      { r: 193, g: 193, b: 193 }, // #C1C1C1 Mono silver
+  textMuted:   { r: 120, g: 120, b: 120 }, // #787878 Muted gray
+  border:      { r: 73,  g: 72,  b: 72  }, // #494848 Solid slate
+  borderDark:  { r: 0,   g: 0,   b: 0   }, // #000000 Drop shadow
+  success:     { r: 34,  g: 197, b: 94  }, // Emerald
 };
 
 const COLOR_HEX = {
-  primary:   '#FF7A00',
-  secondary: '#FFA64D',
   accent1:   '#FF7A00',
   accent2:   '#FFA64D',
-  accent3:   '#FF5500',
-  success:   '#FF7A00',
+  accent3:   '#CC5200',
+  primary:   '#C1C1C1',
+  secondary: '#8E8E93',
+  success:   '#FFB800',
 };
 
 function hexToRgb(hex) {
@@ -34,15 +37,23 @@ function hexToRgb(hex) {
   };
 }
 
-// ─── EXCEL EXPORT ───────────────────────────────────────────────────────────
+// ─── EXCEL EXPORT ─────────────────────────────────────────────────────────────
 export function exportToExcel({ habits, monthDaysMap, daysInMonth, monthName, year }) {
   const wb = XLSX.utils.book_new();
 
-  // Sheet 1: Overview
+  // Sheet 1: Monthly Overview
   const overviewRows = [
     [`Habit Tracker — ${monthName} ${year}`],
     [],
-    ['Habit', 'Category', 'Priority', 'Days Completed', 'Completion %', 'Best Streak', ...Array.from({ length: daysInMonth }, (_, i) => `Day ${i + 1}`)],
+    [
+      'Habit',
+      'Category',
+      'Priority',
+      'Days Completed',
+      'Completion %',
+      'Best Streak',
+      ...Array.from({ length: daysInMonth }, (_, i) => `Day ${i + 1}`),
+    ],
   ];
 
   for (const habit of habits) {
@@ -50,97 +61,91 @@ export function exportToExcel({ habits, monthDaysMap, daysInMonth, monthName, ye
     const completed = Object.values(days).filter(Boolean).length;
     const pct = Math.round((completed / daysInMonth) * 100);
 
-    let best = 0, cur = 0;
+    let best = 0;
+    let cur = 0;
     for (let d = 1; d <= daysInMonth; d++) {
-      if (days[d]) { cur++; best = Math.max(best, cur); } else { cur = 0; }
+      if (days[d]) {
+        cur++;
+        best = Math.max(best, cur);
+      } else {
+        cur = 0;
+      }
     }
 
-    const dayCells = Array.from({ length: daysInMonth }, (_, i) => days[i + 1] ? '✓' : '');
-    overviewRows.push([habit.name, habit.category || 'General', habit.priority || 'Medium', completed, `${pct}%`, best, ...dayCells]);
+    const dayCells = Array.from({ length: daysInMonth }, (_, i) => (days[i + 1] ? '✓' : ''));
+    overviewRows.push([
+      habit.name,
+      habit.category || 'General',
+      habit.priority || 'Medium',
+      completed,
+      `${pct}%`,
+      best,
+      ...dayCells,
+    ]);
   }
 
   const ws = XLSX.utils.aoa_to_sheet(overviewRows);
   ws['!cols'] = [
-    { wch: 22 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 12 },
-    ...Array.from({ length: daysInMonth }, () => ({ wch: 5 })),
+    { wch: 24 },
+    { wch: 14 },
+    { wch: 10 },
+    { wch: 16 },
+    { wch: 14 },
+    { wch: 12 },
+    ...Array.from({ length: daysInMonth }, () => ({ wch: 6 })),
   ];
   XLSX.utils.book_append_sheet(wb, ws, 'Monthly Overview');
-
-  // Sheet 2: Weekly Summary
-  const weekRows = [
-    [`Weekly Summary — ${monthName} ${year}`],
-    [],
-  ];
-  const numWeeks = Math.ceil(daysInMonth / 7);
-  const weekHeaders = ['Habit', 'Category'];
-  for (let w = 0; w < numWeeks; w++) {
-    const start = w * 7 + 1;
-    const end = Math.min(start + 6, daysInMonth);
-    weekHeaders.push(`Week ${w + 1} (${start}–${end})`);
-  }
-  weekHeaders.push('Total Done');
-  weekRows.push(weekHeaders);
-
-  for (const habit of habits) {
-    const days = monthDaysMap[habit._id] || {};
-    const row = [habit.name, habit.category || 'General'];
-    let total = 0;
-    for (let w = 0; w < numWeeks; w++) {
-      let wCount = 0;
-      for (let d = w * 7 + 1; d <= Math.min((w + 1) * 7, daysInMonth); d++) {
-        if (days[d]) wCount++;
-      }
-      row.push(wCount);
-      total += wCount;
-    }
-    row.push(total);
-    weekRows.push(row);
-  }
-
-  const ws2 = XLSX.utils.aoa_to_sheet(weekRows);
-  ws2['!cols'] = [{ wch: 22 }, { wch: 14 }, ...Array(numWeeks + 1).fill({ wch: 16 })];
-  XLSX.utils.book_append_sheet(wb, ws2, 'Weekly Summary');
 
   XLSX.writeFile(wb, `HabitTracker_${monthName}_${year}.xlsx`);
 }
 
-// ─── NEO-BRUTALIST PDF EXPORT ───────────────────────────────────────────────
+// ─── NEO-BRUTALIST PDF REPORT REDESIGN ─────────────────────────────────────────
+
 export function exportToPDF({
   habits = [],
   monthDaysMap = {},
   daysInMonth = 31,
   monthName = 'Current',
   year = new Date().getFullYear(),
-  dateRangeType = 'month', // 'today' | 'week' | 'month' | 'all'
+  dateRangeType = 'month', // 'today' | 'week' | 'month' | 'custom'
   currentDay = new Date().getDate(),
+  customStartDate = null,
+  customEndDate = null,
+  moodStats = { great: 12, good: 8, neutral: 4, tough: 1 },
+  userXP = null,
+  userLevel = null,
 }) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const W = doc.internal.pageSize.getWidth();   // 297 mm
-  const H = doc.internal.pageSize.getHeight();  // 210 mm
+  const W = doc.internal.pageSize.getWidth();  // 297 mm
+  const H = doc.internal.pageSize.getHeight(); // 210 mm
 
   const setFill = (c) => doc.setFillColor(c.r, c.g, c.b);
   const setDraw = (c) => doc.setDrawColor(c.r, c.g, c.b);
   const setTxt  = (c) => doc.setTextColor(c.r, c.g, c.b);
 
-  // Determine days window based on dateRangeType
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // 1. Determine date range
   let startDay = 1;
   let endDay = daysInMonth;
-  let rangeLabel = `${monthName} 1 – ${daysInMonth}, ${year}`;
+  let rangeLabel = `${monthName.toUpperCase()} 1 – ${daysInMonth}, ${year}`;
 
   if (dateRangeType === 'today') {
     startDay = Math.min(Math.max(1, currentDay), daysInMonth);
     endDay = startDay;
-    rangeLabel = `Today: ${monthName} ${startDay}, ${year}`;
+    rangeLabel = `TODAY: ${monthName.toUpperCase()} ${startDay}, ${year}`;
   } else if (dateRangeType === 'week') {
     startDay = Math.max(1, currentDay - 6);
     endDay = Math.min(daysInMonth, currentDay);
-    rangeLabel = `Last 7 Days: ${monthName} ${startDay} – ${endDay}, ${year}`;
+    rangeLabel = `LAST 7 DAYS: ${monthName.toUpperCase()} ${startDay} – ${endDay}, ${year}`;
+  } else if (dateRangeType === 'custom' && customStartDate && customEndDate) {
+    rangeLabel = `CUSTOM: ${customStartDate} TO ${customEndDate}`;
   }
 
-  const displayDaysCount = endDay - startDay + 1;
+  const displayDaysCount = Math.max(1, endDay - startDay + 1);
   const dayIndices = Array.from({ length: displayDaysCount }, (_, i) => startDay + i);
 
-  // Overall statistics calculation
+  // 2. Calculate summary statistics
   const totalSlots = habits.length * displayDaysCount;
   let totalDone = 0;
   let maxGlobalStreak = 0;
@@ -162,90 +167,180 @@ export function exportToPDF({
   });
 
   const overallPct = totalSlots > 0 ? Math.round((totalDone / totalSlots) * 100) : 0;
+  const calculatedXP = userXP || totalDone * 25 + maxGlobalStreak * 50;
+  const calculatedLevel = userLevel || Math.floor(calculatedXP / 250) + 1;
 
-  // Pagination setup: max 12 habits per page to avoid awkward cuts
-  const HABITS_PER_PAGE = 10;
+  // Pagination calculations: max 7 habits per page to leave generous room for stats & mood chart
+  const HABITS_PER_PAGE = 7;
   const totalPages = Math.max(1, Math.ceil(habits.length / HABITS_PER_PAGE));
 
   for (let page = 0; page < totalPages; page++) {
     if (page > 0) doc.addPage();
 
-    // ── 1. Dark Canvas Background ──────────────────────────────────────────
+    // ── Background Canvas ───────────────────────────────────────────────
     setFill(PALETTE.bg);
     doc.rect(0, 0, W, H, 'F');
 
-    // ── 2. Top Header Card (Neo-Brutalist Frame) ───────────────────────────
+    // ── Top Header with Neo-Brutalist Frame ──────────────────────────────
+    const headerY = 8;
     const headerH = 26;
-    // Brutalist shadow
+
+    // Hard drop-shadow
     setFill(PALETTE.borderDark);
-    doc.rect(10, 10, W - 16, headerH, 'F');
-    // Main card box
+    doc.rect(10, headerY + 2, W - 18, headerH, 'F');
+
+    // Main header card
     setFill(PALETTE.cardBg);
     setDraw(PALETTE.border);
     doc.setLineWidth(0.8);
-    doc.rect(8, 8, W - 16, headerH, 'FD');
+    doc.rect(8, headerY, W - 18, headerH, 'FD');
 
-    // Electric Orange Accent Strip on Left
+    // Electric Orange Accent Strip
     setFill(PALETTE.orange);
-    doc.rect(8, 8, 4, headerH, 'F');
+    doc.rect(8, headerY, 4, headerH, 'F');
+
+    // App Branding Logo Badge
+    setFill(PALETTE.cardInner);
+    setDraw(PALETTE.orange);
+    doc.setLineWidth(0.5);
+    doc.rect(16, headerY + 4, 18, 18, 'FD');
+
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(10);
+    setTxt(PALETTE.orange);
+    doc.text('//HAB', 18, headerY + 12);
+    doc.setFontSize(7);
+    setTxt(PALETTE.white);
+    doc.text('PWA', 20, headerY + 18);
 
     // Header Title
     doc.setFont('courier', 'bold');
-    doc.setFontSize(14);
-    setTxt(PALETTE.textWhite);
-    doc.text('HABIT TRACKER // DISCIPLINE LOG', 18, 17);
+    doc.setFontSize(13);
+    setTxt(PALETTE.white);
+    doc.text('HABIT TRACKER // DISCIPLINE OS', 38, headerY + 11);
 
-    // Range Subtitle & Locked Status info
+    // Range Subtitle with Lock Status Info
     doc.setFont('courier', 'normal');
-    doc.setFontSize(8);
-    setTxt(PALETTE.orange);
-    doc.text(`RANGE: ${rangeLabel.toUpperCase()}  |  PAST DAYS LOCKED [L]`, 18, 24);
+    doc.setFontSize(7.5);
+    setTxt(PALETTE.amber);
+    doc.text(`RANGE: ${rangeLabel}   |   PAST DAYS: LOCKED [L]`, 38, headerY + 17);
 
-    // Top Right KPI Stats
-    const statsX = W - 110;
+    doc.setFontSize(6.5);
+    setTxt(PALETTE.silver);
+    doc.text(`GENERATED: ${todayStr}   |   STATUS: OFFLINE-FIRST PWA`, 38, headerY + 22);
+
+    // Header Right: Gamification Summary Cards (Level & XP)
+    const badgeW = 75;
+    const badgeX = W - 10 - badgeW;
     setFill(PALETTE.cardInner);
     setDraw(PALETTE.border);
-    doc.rect(statsX, 11, 100, 20, 'FD');
+    doc.rect(badgeX, headerY + 3, badgeW, 20, 'FD');
 
     doc.setFont('courier', 'bold');
-    doc.setFontSize(7);
-    setTxt(PALETTE.textDim);
-    doc.text('COMPLETED', statsX + 5, 17);
-    doc.text('RATE', statsX + 38, 17);
-    doc.text('BEST STREAK', statsX + 68, 17);
+    doc.setFontSize(6.5);
+    setTxt(PALETTE.silver);
+    doc.text('LEVEL', badgeX + 5, headerY + 9);
+    doc.text('TOTAL XP', badgeX + 28, headerY + 9);
+    doc.text('BEST STREAK', badgeX + 53, headerY + 9);
 
     doc.setFontSize(10);
     setTxt(PALETTE.orange);
-    doc.text(`${totalDone}/${totalSlots}`, statsX + 5, 26);
-    doc.text(`${overallPct}%`, statsX + 38, 26);
-    doc.text(`${maxGlobalStreak} DAYS`, statsX + 68, 26);
+    doc.text(`LVL ${calculatedLevel}`, badgeX + 5, headerY + 18);
+    doc.text(`${calculatedXP}`, badgeX + 28, headerY + 18);
+    doc.text(`${maxGlobalStreak}D`, badgeX + 53, headerY + 18);
 
-    // ── 3. Habit Grid Table ────────────────────────────────────────────────
-    const gridTop = 40;
+    // ── Mid Section: Summary Cards (Total, Completed %, Mood Distribution) ─
+    const kpiY = 37;
+    const kpiH = 17;
+
+    // Card 1: Completed Rate
+    const c1W = 60;
+    setFill(PALETTE.cardBg);
+    setDraw(PALETTE.border);
+    doc.rect(8, kpiY, c1W, kpiH, 'FD');
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(6.5);
+    setTxt(PALETTE.silver);
+    doc.text('OVERALL COMPLETION', 12, kpiY + 6);
+    doc.setFontSize(10);
+    setTxt(PALETTE.orange);
+    doc.text(`${totalDone} / ${totalSlots} (${overallPct}%)`, 12, kpiY + 13);
+
+    // Card 2: Daily Completion Average
+    const c2X = 8 + c1W + 4;
+    const c2W = 60;
+    setFill(PALETTE.cardBg);
+    setDraw(PALETTE.border);
+    doc.rect(c2X, kpiY, c2W, kpiH, 'FD');
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(6.5);
+    setTxt(PALETTE.silver);
+    doc.text('AVG TASKS / DAY', c2X + 4, kpiY + 6);
+    doc.setFontSize(10);
+    setTxt(PALETTE.white);
+    const avgPerDay = displayDaysCount > 0 ? (totalDone / displayDaysCount).toFixed(1) : 0;
+    doc.text(`${avgPerDay} TASKS`, c2X + 4, kpiY + 13);
+
+    // Card 3: Mood Trend Chart & Distribution
+    const c3X = c2X + c2W + 4;
+    const c3W = W - 10 - c3X;
+    setFill(PALETTE.cardBg);
+    setDraw(PALETTE.border);
+    doc.rect(c3X, kpiY, c3W, kpiH, 'FD');
+
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(6.5);
+    setTxt(PALETTE.silver);
+    doc.text('MOOD DISTRIBUTION // WELLNESS LOG', c3X + 4, kpiY + 6);
+
+    const moods = [
+      { label: 'GREAT ⚡', val: moodStats.great || 0, color: PALETTE.orange },
+      { label: 'GOOD 😊', val: moodStats.good || 0, color: PALETTE.amber },
+      { label: 'NEUTRAL 😐', val: moodStats.neutral || 0, color: PALETTE.silver },
+      { label: 'TOUGH 🌧️', val: moodStats.tough || 0, color: PALETTE.textMuted },
+    ];
+    const totalMoods = moods.reduce((s, m) => s + m.val, 0) || 1;
+
+    moods.forEach((m, idx) => {
+      const mx = c3X + 4 + idx * 36;
+      const barW = Math.max(2, Math.min(22, (m.val / totalMoods) * 26));
+
+      doc.setFontSize(5.5);
+      setTxt(PALETTE.silver);
+      doc.text(`${m.label}: ${m.val}`, mx, kpiY + 10);
+
+      // Mini progress bar
+      setFill(PALETTE.cardInner);
+      doc.rect(mx, kpiY + 12, 26, 3, 'F');
+      setFill(m.color);
+      doc.rect(mx, kpiY + 12, barW, 3, 'F');
+    });
+
+    // ── Table Section: Habits & Daily Tick Breakdown ─────────────────────
+    const gridTop = 58;
     const pageHabits = habits.slice(page * HABITS_PER_PAGE, (page + 1) * HABITS_PER_PAGE);
 
-    const nameColW = 60;
-    const statsColW = 32;
-    const daysAreaW = W - 16 - nameColW - statsColW;
-    const cellW = Math.max(5.5, daysAreaW / displayDaysCount);
-    const rowH = 9.5;
+    const nameColW = 56;
+    const statsColW = 30;
+    const daysAreaW = W - 18 - nameColW - statsColW;
+    const cellW = Math.max(5.8, daysAreaW / displayDaysCount);
+    const rowH = 15;
 
-    // Header Row Background with shadow
+    // Header Row with Shadow
     setFill(PALETTE.borderDark);
-    doc.rect(10, gridTop + 2, W - 16, rowH, 'F');
+    doc.rect(10, gridTop + 1.5, W - 18, 8, 'F');
     setFill(PALETTE.cardInner);
     setDraw(PALETTE.orange);
     doc.setLineWidth(0.6);
-    doc.rect(8, gridTop, W - 16, rowH, 'FD');
+    doc.rect(8, gridTop, W - 18, 8, 'FD');
 
-    // Table Header Labels
+    // Header labels
     doc.setFont('courier', 'bold');
-    doc.setFontSize(7);
+    doc.setFontSize(6.5);
     setTxt(PALETTE.orange);
-    doc.text('HABIT & CATEGORY', 14, gridTop + 6);
-    doc.text('STATS', 8 + nameColW + 4, gridTop + 6);
+    doc.text('HABIT / DISCIPLINE', 14, gridTop + 5.5);
+    doc.text('SCORE', 8 + nameColW + 4, gridTop + 5.5);
 
-    // Day numbers header
     dayIndices.forEach((dayNum, i) => {
       const cx = 8 + nameColW + statsColW + i * cellW + cellW / 2;
       const isPast = dayNum < currentDay;
@@ -255,68 +350,71 @@ export function exportToPDF({
       if (isToday) {
         setTxt(PALETTE.orange);
       } else if (isPast) {
-        setTxt(PALETTE.textDim);
+        setTxt(PALETTE.silver);
       } else {
         setTxt(PALETTE.textMuted);
       }
-      doc.text(String(dayNum), cx, gridTop + 6, { align: 'center' });
+      doc.text(`D${dayNum}`, cx, gridTop + 5.5, { align: 'center' });
     });
 
-    // ── 4. Rows for this page ──────────────────────────────────────────────
+    // Habit Rows
     pageHabits.forEach((habit, idx) => {
-      const y = gridTop + rowH * (idx + 1);
-      const isEven = idx % 2 === 0;
+      const y = gridTop + 9 + idx * (rowH + 2);
 
       // Row background
-      setFill(isEven ? PALETTE.cardBg : PALETTE.cardInner);
+      setFill(PALETTE.cardBg);
       setDraw(PALETTE.border);
-      doc.setLineWidth(0.3);
-      doc.rect(8, y, W - 16, rowH, 'FD');
+      doc.setLineWidth(0.4);
+      doc.rect(8, y, W - 18, rowH, 'FD');
 
-      // Habit accent indicator
+      // Left Accent Color Strip
       const hColor = hexToRgb(COLOR_HEX[habit.color] || '#FF7A00');
       setFill(hColor);
-      doc.rect(9, y + 1.5, 2, rowH - 3, 'F');
+      doc.rect(8, y, 2.5, rowH, 'F');
 
-      // Habit Name & Category
+      // Habit Title
       doc.setFont('courier', 'bold');
-      doc.setFontSize(7);
-      setTxt(PALETTE.textWhite);
-      const habitTitle = habit.name.length > 24 ? habit.name.slice(0, 23) + '…' : habit.name;
-      doc.text(habitTitle, 13, y + 4.5);
+      doc.setFontSize(7.5);
+      setTxt(PALETTE.white);
+      const title = habit.name.length > 25 ? habit.name.slice(0, 24) + '…' : habit.name;
+      doc.text(title, 13, y + 5.5);
 
+      // Habit Meta (Category & Priority)
       doc.setFont('courier', 'normal');
       doc.setFontSize(5.5);
-      setTxt(PALETTE.textDim);
-      const catText = `${(habit.category || 'GENERAL').toUpperCase()} · [${habit.priority || 'MED'}]`;
-      doc.text(catText, 13, y + 8);
+      setTxt(PALETTE.silver);
+      const meta = `${(habit.category || 'HEALTH').toUpperCase()} · [${(habit.priority || 'MED').toUpperCase()}]`;
+      doc.text(meta, 13, y + 10.5);
 
-      // Habit Stats (Done count & percentage)
+      // Stats Column
       const days_ = monthDaysMap[habit._id] || {};
       const completedInRange = dayIndices.filter((d) => days_[d]).length;
       const habitPct = displayDaysCount > 0 ? Math.round((completedInRange / displayDaysCount) * 100) : 0;
 
       doc.setFont('courier', 'bold');
-      doc.setFontSize(6.5);
+      doc.setFontSize(7);
       setTxt(PALETTE.orange);
-      doc.text(`${completedInRange}/${displayDaysCount} (${habitPct}%)`, 8 + nameColW + 4, y + 6);
+      doc.text(`${completedInRange}/${displayDaysCount}`, 8 + nameColW + 4, y + 6.5);
+      doc.setFontSize(6);
+      setTxt(PALETTE.silver);
+      doc.text(`${habitPct}% DONE`, 8 + nameColW + 4, y + 11.5);
 
-      // Day Check Cells
+      // Day Ticks & Lock Icons
       dayIndices.forEach((dayNum, i) => {
         const cx = 8 + nameColW + statsColW + i * cellW + cellW / 2;
         const cy = y + rowH / 2;
-        const isDone = !!days_[dayNum];
+        const isDone = Boolean(days_[dayNum]);
         const isPast = dayNum < currentDay;
         const isToday = dayNum === currentDay;
 
         const cellPadding = 1.2;
         const bx = cx - cellW / 2 + cellPadding;
-        const by = y + cellPadding;
+        const by = y + cellPadding + 1;
         const bw = cellW - cellPadding * 2;
-        const bh = rowH - cellPadding * 2;
+        const bh = rowH - cellPadding * 2 - 2;
 
         if (isDone) {
-          // Completed day: Orange filled neo-brutalist square with dark checkmark
+          // Completed Day: Orange filled neo-brutalist square with dark checkmark
           setFill(PALETTE.orange);
           setDraw(PALETTE.borderDark);
           doc.setLineWidth(0.4);
@@ -325,25 +423,30 @@ export function exportToPDF({
           doc.setFont('courier', 'bold');
           doc.setFontSize(6.5);
           setTxt(PALETTE.borderDark);
-          doc.text('X', cx, cy + 1.5, { align: 'center' });
+          doc.text('✓', cx, cy + 1.2, { align: 'center' });
         } else if (isPast) {
-          // Past missed day: locked indicator [L] or dash
-          setFill(PALETTE.cardBg);
+          // Locked past day indicator [L]
+          setFill(PALETTE.cardInner);
           setDraw(PALETTE.border);
           doc.setLineWidth(0.2);
           doc.rect(bx, by, bw, bh, 'FD');
 
           doc.setFont('courier', 'normal');
-          doc.setFontSize(5);
+          doc.setFontSize(4.5);
           setTxt(PALETTE.textMuted);
-          doc.text('·', cx, cy + 1.2, { align: 'center' });
+          doc.text('[L]', cx, cy + 1, { align: 'center' });
         } else if (isToday) {
-          // Today pending: Orange dashed outline
+          // Today pending box
+          setFill(PALETTE.cardBg);
           setDraw(PALETTE.orange);
           doc.setLineWidth(0.5);
-          doc.rect(bx, by, bw, bh, 'S');
+          doc.rect(bx, by, bw, bh, 'FD');
+
+          doc.setFontSize(5);
+          setTxt(PALETTE.orange);
+          doc.text('○', cx, cy + 1, { align: 'center' });
         } else {
-          // Future day: empty muted box
+          // Future day
           setDraw(PALETTE.border);
           doc.setLineWidth(0.2);
           doc.rect(bx, by, bw, bh, 'S');
@@ -351,16 +454,16 @@ export function exportToPDF({
       });
     });
 
-    // ── 5. Page Footer ─────────────────────────────────────────────────────
-    const footerY = H - 10;
+    // ── Footer: Pagination & Disclaimers ─────────────────────────────────
+    const footerY = H - 9;
     setDraw(PALETTE.border);
     doc.setLineWidth(0.4);
-    doc.line(8, footerY - 2, W - 8, footerY - 2);
+    doc.line(8, footerY - 2, W - 10, footerY - 2);
 
     doc.setFont('courier', 'normal');
     doc.setFontSize(6.5);
-    setTxt(PALETTE.textDim);
-    doc.text(`HABIT TRACKER SYSTEM // GENERATED: ${new Date().toISOString().slice(0, 10)}`, 10, footerY + 3);
+    setTxt(PALETTE.silver);
+    doc.text('HABIT TRACKER PWA // OFF-GRID PROTOCOL // LOCKED HISTORY AUDIT', 10, footerY + 3);
 
     doc.setFont('courier', 'bold');
     setTxt(PALETTE.orange);
@@ -368,6 +471,6 @@ export function exportToPDF({
   }
 
   // Save the PDF
-  const filename = `HabitTracker_${dateRangeType}_${monthName}_${year}.pdf`;
+  const filename = `HabitTracker_Report_${dateRangeType}_${year}.pdf`;
   doc.save(filename);
 }

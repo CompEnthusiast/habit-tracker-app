@@ -45,10 +45,12 @@ export default function TodayTasksChecklist({
     day: 'numeric',
   }).toUpperCase();
 
-  const completedTodayHabits = habits.filter(
+  const activeHabits = useMemo(() => habits.filter((h) => !h.droppedFromToday), [habits]);
+
+  const completedTodayHabits = activeHabits.filter(
     (h) => h.completions && h.completions[todayDateKey]
   );
-  const totalHabits = habits.length;
+  const totalHabits = activeHabits.length;
   const completedCount = completedTodayHabits.length;
   const completionPercent =
     totalHabits > 0 ? Math.round((completedCount / totalHabits) * 100) : 0;
@@ -56,7 +58,7 @@ export default function TodayTasksChecklist({
 
   // Filtered habits
   const filteredHabits = useMemo(() => {
-    return habits.filter((h) => {
+    return activeHabits.filter((h) => {
       const matchSearch =
         !searchQuery ||
         h.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -68,7 +70,7 @@ export default function TodayTasksChecklist({
 
       return matchSearch && matchPriority;
     });
-  }, [habits, searchQuery, filterPriority]);
+  }, [activeHabits, searchQuery, filterPriority]);
 
   const handleToggle = (habit) => {
     const isCurrentlyDone = habit.completions && habit.completions[todayDateKey];

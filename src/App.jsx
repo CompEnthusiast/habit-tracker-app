@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { WifiOff, Database, RefreshCw, Undo2, Redo2 } from 'lucide-react';
+import { WifiOff, Database, RefreshCw, Undo2, Redo2, Clock } from 'lucide-react';
 import DashboardHeader from './components/DashboardHeader';
 import HabitGrid from './components/HabitGrid';
 import Analysis from './components/Analysis';
@@ -22,6 +22,20 @@ import WeeklyProgressChart from './components/WeeklyProgressChart';
 import DailyNotes from './components/DailyNotes';
 import DebugPanel from './components/DebugPanel';
 import ShortcutsHelp from './components/ShortcutsHelp';
+import XPLevelBar from './components/XPLevelBar';
+import StreakFreezeModal from './components/StreakFreezeModal';
+import BadgeGalleryModal from './components/BadgeGalleryModal';
+import RoutinesPanel from './components/RoutinesPanel';
+import GuidedFlowModal from './components/GuidedFlowModal';
+import AICoachModal from './components/AICoachModal';
+import AmbienceMixerModal from './components/AmbienceMixerModal';
+import VoiceCheckinModal from './components/VoiceCheckinModal';
+import MoodTrackerModal from './components/MoodTrackerModal';
+import Top3Priorities from './components/Top3Priorities';
+import DailyQuestsPanel from './components/DailyQuestsPanel';
+import EveningReviewModal from './components/EveningReviewModal';
+import PWAInstallBanner from './components/PWAInstallBanner';
+import SettingsModal from './components/SettingsModal';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -30,18 +44,32 @@ import { getMonthDays } from './utils/streaks';
 import { useAuth } from './context/AuthContext';
 import { useTheme } from './context/ThemeContext';
 import {
-  getCachedHabits,
-  saveCachedHabits,
-  enqueueAction,
-  flushPendingQueue,
-  getLastSyncTime,
-  getPendingQueue,
-  resolveHabitConflicts,
-  createDebouncedSaver,
-} from './utils/offlineSync';
+  getAllHabitsFromDB,
+  saveHabitsToDB,
+  saveSingleHabitToDB,
+  softDeleteHabitInDB,
+  getDayRecordFromDB,
+  saveDayRecordToDB,
+  getAllDayRecordsFromDB,
+  getMeta,
+  setMeta,
+} from './utils/db';
+import { updateAppBadge } from './utils/pwaManager';
+import syncService from './utils/syncService';
 import { useDayRollover, dateKey } from './hooks/useDayRollover';
 import { useUndoRedo } from './hooks/useUndoRedo';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import {
+  getUserGamificationState,
+  handleHabitXpChange,
+  calculateStreakWithFreezes,
+  checkEligibleForFreezePrompt,
+  evaluateAndUnlockBadges,
+  getFreezeTokenStatus,
+} from './utils/gamification';
+import { calculateLevelFromXP } from './data/gamificationConfig';
+import { sounds } from './utils/soundEffects';
+import { triggerNeoConfetti } from './utils/confetti';
 
 function Dashboard() {
   const { user } = useAuth();
@@ -51,15 +79,16 @@ function Dashboard() {
   const [debugDayOffset, setDebugDayOffset] = useState(0);
 
   // Day rollover handler
-  const handleDayRollover = useCallback(({ previous, current, missedDays }) => {
+  const handleDayRollover = useCallback(({ previous, current, missedDays, updatedHabits }) => {
     console.log(`[DayRollover] Midnight transition: ${previous} -> ${current}`);
-    // Refresh habits and ensure yesterday's completions remain locked in history
-    loadHabits();
+    if (updatedHabits && updatedHabits.length > 0) {
+      setHabits(updatedHabits);
+      saveHabitsToDB(updatedHabits);
+    }
+    syncService.syncNow();
   }, []);
 
-  const { todayInfo, checkRollover } = useDayRollover(handleDayRollover, debugDayOffset);
-
-  const [habits, setHabits] = useState(() => getCachedHabits() || []);
+  const [habits, setHabits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
@@ -67,7 +96,6 @@ function Dashboard() {
   const [showPomodoroModal, setShowPomodoroModal] = useState(false);
   const [pomodoroInitialHabitId, setPomodoroInitialHabitId] = useState(null);
   const [editingHabit, setEditingHabit] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(() => new Date(todayInfo.year, todayInfo.month - 1, 1));
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [priorityFilter, setPriorityFilter] = useState('All');
@@ -75,16 +103,56 @@ function Dashboard() {
   const [error, setError] = useState('');
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [syncStatus, setSyncStatus] = useState('idle'); // 'synced' | 'syncing' | 'error' | 'idle'
-  const [lastSyncTime, setLastSyncTime] = useState(getLastSyncTime);
-  const [pendingCount, setPendingCount] = useState(() => getPendingQueue().length);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
+  const [pendingCount, setPendingCount] = useState(0);
   const [notificationsEnabled, setNotificationsEnabled] = useState(
     typeof Notification !== 'undefined' && Notification.permission === 'granted'
   );
 
-  const searchInputRef = useRef(null);
+  // Gamification & RPG Leveling State
+  const [gamificationState, setGamificationState] = useState({
+    totalXP: 0,
+    level: 1,
+    currentLevelXP: 0,
+    xpForNext: 100,
+    progressPercent: 0,
+    title: 'Novice',
+    badgeColor: '#C1C1C1',
+  });
+  const [floatingXp, setFloatingXp] = useState(null);
+  const [levelUpEvent, setLevelUpEvent] = useState(null);
+  const [freezeTokensAvailable, setFreezeTokensAvailable] = useState(2);
+  const [showFreezeModal, setShowFreezeModal] = useState(false);
+  const [freezePromptDate, setFreezePromptDate] = useState(null);
+  const [unlockedBadgeRecords, setUnlockedBadgeRecords] = useState([]);
+  const [showBadgesModal, setShowBadgesModal] = useState(false);
+  const [activeRoutineForFlow, setActiveRoutineForFlow] = useState(null);
+  const [showGuidedFlowModal, setShowGuidedFlowModal] = useState(false);
+  const [globalStreak, setGlobalStreak] = useState(0);
+  const [globalBestStreak, setGlobalBestStreak] = useState(0);
 
-  // Debounced cache saver (< 400ms)
-  const debouncedSaveRef = useRef(createDebouncedSaver(saveCachedHabits, 350));
+  // Phase 3 Modal States
+  const [showAICoachModal, setShowAICoachModal] = useState(false);
+  const [showAmbienceModal, setShowAmbienceModal] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [showMoodModal, setShowMoodModal] = useState(false);
+  const [showEveningModal, setShowEveningModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [top3PriorityIds, setTop3PriorityIds] = useState([]);
+  const [claimedQuestIds, setClaimedQuestIds] = useState([]);
+  const [currentDayRecord, setCurrentDayRecord] = useState(null);
+  const [allDayRecords, setAllDayRecords] = useState([]);
+
+  const {
+    todayInfo,
+    checkRollover,
+    simulateNextDay,
+    clockWarning,
+    isDateLocked,
+  } = useDayRollover(handleDayRollover, debugDayOffset, habits);
+
+  const [selectedDate, setSelectedDate] = useState(() => new Date(todayInfo.year, todayInfo.month - 1, 1));
+  const searchInputRef = useRef(null);
 
   const selectedYear = selectedDate.getFullYear();
   const selectedMonth = selectedDate.getMonth() + 1;
@@ -94,78 +162,84 @@ function Dashboard() {
   // Undo / Redo Hook
   const { record, undo, redo, canUndo, canRedo } = useUndoRedo();
 
-  // Load habits from backend or cached fallback
-  const loadHabits = useCallback(async () => {
-    if (!user) return;
-    try {
-      setSyncStatus('syncing');
-      const data = await fetchHabits();
-      setHabits(data);
-      saveCachedHabits(data);
-      setLastSyncTime(Date.now());
-      setSyncStatus('synced');
-      setPendingCount(0);
-    } catch (e) {
-      const cached = getCachedHabits();
-      if (cached && cached.length > 0) {
-        setHabits(cached);
-        setError('Working offline / using locally saved habits.');
-      } else {
-        setError(e.message || 'Failed to load habits.');
+  // Initialize IndexedDB, Sync, Gamification, Streaks, and Day Records
+  useEffect(() => {
+    let unsubscribe = null;
+
+    async function initStorageAndSync() {
+      try {
+        const local = await getAllHabitsFromDB();
+        if (local && local.length > 0) {
+          setHabits(local);
+          setLoading(false);
+        }
+
+        // Load gamification state & level
+        const gamState = await getUserGamificationState(local || []);
+        setGamificationState(gamState);
+        setUnlockedBadgeRecords(gamState.unlockedBadges || []);
+
+        // Load streak with freeze immunity
+        const streakInfo = await calculateStreakWithFreezes(local || [], todayInfo.dateKey);
+        setGlobalStreak(streakInfo.currentStreak);
+        setGlobalBestStreak(streakInfo.longestStreak);
+
+        // Load streak freeze tokens
+        const freezeStatus = await getFreezeTokenStatus();
+        setFreezeTokensAvailable(freezeStatus.available);
+
+        // Load Day Records for Mood & Correlations
+        const dayRec = await getDayRecordFromDB(todayInfo.dateKey);
+        setCurrentDayRecord(dayRec || { dateKey: todayInfo.dateKey, tasks: [], mood: null });
+        const allDays = await getAllDayRecordsFromDB();
+        setAllDayRecords(allDays || []);
+
+        // Load Top 3 Priorities
+        const savedTop3 = await getMeta('top3PriorityIds');
+        if (savedTop3?.value) setTop3PriorityIds(savedTop3.value);
+
+        // Load Daily Claimed Quests
+        const savedClaimedQuests = await getMeta(`claimedQuests_${todayInfo.dateKey}`);
+        if (savedClaimedQuests?.value) setClaimedQuestIds(savedClaimedQuests.value);
+
+        // Check if yesterday was missed and eligible for freeze suggestion
+        const freezeEligibility = await checkEligibleForFreezePrompt(local || []);
+        if (freezeEligibility) {
+          setFreezePromptDate(freezeEligibility.dateKey);
+          setShowFreezeModal(true);
+        }
+      } catch (err) {
+        console.warn('Initial IndexedDB/Gamification read error:', err);
       }
-      setSyncStatus(isOnline ? 'error' : 'idle');
-    } finally {
-      setLoading(false);
+
+      unsubscribe = syncService.subscribe((state) => {
+        setSyncStatus(state.status);
+        setIsOnline(state.isOnline);
+        setLastSyncTime(state.lastSyncTime);
+        setPendingCount(state.pendingCount);
+      });
+
+      if (user) {
+        await syncService.init((remoteHabits) => {
+          setHabits(remoteHabits);
+          setLoading(false);
+          // Re-evaluate streaks
+          calculateStreakWithFreezes(remoteHabits, todayInfo.dateKey).then((s) => {
+            setGlobalStreak(s.currentStreak);
+            setGlobalBestStreak(s.longestStreak);
+          });
+        });
+      } else {
+        setLoading(false);
+      }
     }
-  }, [user, isOnline]);
 
-  useEffect(() => {
-    loadHabits();
-  }, [loadHabits]);
-
-  // Periodic Auto-Sync (every 30s) as fallback
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (navigator.onLine && user && syncStatus !== 'syncing') {
-        loadHabits();
-      }
-    }, 30000);
-    return () => clearInterval(timer);
-  }, [user, syncStatus, loadHabits]);
-
-  // Online / Offline Detection & Auto-Replay
-  useEffect(() => {
-    const handleOnline = async () => {
-      setIsOnline(true);
-      setSyncStatus('syncing');
-      const res = await flushPendingQueue(toggleHabitDay);
-      setPendingCount(getPendingQueue().length);
-      if (res.flushed > 0) {
-        loadHabits();
-      } else {
-        setSyncStatus('synced');
-      }
-    };
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    initStorageAndSync();
 
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      if (unsubscribe) unsubscribe();
     };
-  }, [loadHabits]);
-
-  // Sync before page unload
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      const cached = getCachedHabits();
-      if (cached) saveCachedHabits(cached);
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
+  }, [user, todayInfo.dateKey]);
 
   // Optimistic Toggle Habit Check-in with Queueing & Locked Day Enforcement
   const toggleHabit = useCallback(
@@ -173,20 +247,15 @@ function Dashboard() {
       const key = dateKey(selectedYear, selectedMonth, day);
 
       // Previous days locked rule
-      const isPast =
-        selectedYear < todayInfo.year ||
-        (selectedYear === todayInfo.year && selectedMonth < todayInfo.month) ||
-        (selectedYear === todayInfo.year && selectedMonth === todayInfo.month && day < todayInfo.day);
-
-      if (isPast) {
-        setError(`Day ${day} is in the past and permanently LOCKED.`);
+      if (isDateLocked(key)) {
+        setError(`Date ${key} is locked. Past check-ins are read-only and cannot be unticked or edited.`);
         return;
       }
 
-      // Record undo/redo action
       const habitObj = habits.find((h) => h._id === habitId);
       const prevDone = habitObj?.completions?.[key] || false;
 
+      // Record undo/redo action
       record({
         type: 'toggle',
         payload: { habitId, day, key, prevDone },
@@ -194,10 +263,10 @@ function Dashboard() {
           setHabits((prev) => {
             const next = prev.map((h) =>
               h._id === habitId
-                ? { ...h, completions: { ...h.completions, [key]: prevDone } }
+                ? { ...h, completions: { ...h.completions, [key]: prevDone }, updatedAt: new Date().toISOString() }
                 : h
             );
-            debouncedSaveRef.current(next);
+            syncService.debouncedSave(next);
             return next;
           });
           if (navigator.onLine) toggleHabitDay(habitId, key).catch(() => {});
@@ -206,31 +275,79 @@ function Dashboard() {
           setHabits((prev) => {
             const next = prev.map((h) =>
               h._id === habitId
-                ? { ...h, completions: { ...h.completions, [key]: !prevDone } }
+                ? { ...h, completions: { ...h.completions, [key]: !prevDone }, updatedAt: new Date().toISOString() }
                 : h
             );
-            debouncedSaveRef.current(next);
+            syncService.debouncedSave(next);
             return next;
           });
           if (navigator.onLine) toggleHabitDay(habitId, key).catch(() => {});
         },
       });
 
-      // 1. Optimistic instant local update
-      setHabits((prev) => {
-        const updated = prev.map((h) =>
-          h._id === habitId
-            ? { ...h, completions: { ...h.completions, [key]: !h.completions?.[key] } }
-            : h
+      // 1. Optimistic instant local update in state and IndexedDB
+      const isNowCompleted = !prevDone;
+      const updatedHabits = habits.map((h) =>
+        h._id === habitId
+          ? {
+              ...h,
+              completions: { ...h.completions, [key]: isNowCompleted },
+              updatedAt: new Date().toISOString(),
+            }
+          : h
+      );
+      setHabits(updatedHabits);
+      syncService.debouncedSave(updatedHabits);
+
+      // 2. Award / retract XP with anti-cheat duplicate protection
+      if (habitObj) {
+        handleHabitXpChange(habitObj, key, isNowCompleted).then((xpRes) => {
+          if (xpRes.delta !== 0) {
+            setFloatingXp({ amount: xpRes.delta, id: Date.now() });
+            setTimeout(() => setFloatingXp(null), 1800);
+          }
+          setGamificationState((prev) => ({
+            ...prev,
+            totalXP: xpRes.totalXP,
+            ...calculateLevelFromXP(xpRes.totalXP),
+          }));
+          if (xpRes.leveledUp) {
+            setLevelUpEvent({ level: xpRes.newLevel, title: xpRes.title });
+          }
+        });
+      }
+
+      // 3. Re-evaluate streaks with freeze protection and evaluate badges
+      calculateStreakWithFreezes(updatedHabits, todayInfo.dateKey).then((s) => {
+        setGlobalStreak(s.currentStreak);
+        setGlobalBestStreak(s.longestStreak);
+
+        const now = new Date();
+        const totalDoneCount = updatedHabits.reduce(
+          (acc, h) => acc + Object.values(h.completions || {}).filter(Boolean).length,
+          0
         );
-        debouncedSaveRef.current(updated);
-        return updated;
+
+        evaluateAndUnlockBadges({
+          totalCompletions: totalDoneCount,
+          currentStreak: s.currentStreak,
+          bestStreak: s.longestStreak,
+          totalXP: gamificationState.totalXP,
+          completedBefore7AM: now.getHours() < 7,
+          completedAfter10PM: now.getHours() >= 22,
+          completedWeekend: [0, 6].includes(now.getDay()),
+        }).then((badgeRes) => {
+          if (badgeRes.newlyUnlocked.length > 0) {
+            setUnlockedBadgeRecords(badgeRes.allUnlocked);
+            triggerNeoConfetti(2500);
+            sounds.playBadgeUnlock();
+          }
+        });
       });
 
-      // 2. Network sync or queue if offline
-      if (!navigator.onLine) {
-        enqueueAction({ type: 'toggle', habitId, key });
-        setPendingCount(getPendingQueue().length);
+      // 4. Network sync or queue if offline
+      if (!isOnline) {
+        await syncService.queueAction('toggle', { habitId, key });
         return;
       }
 
@@ -239,76 +356,144 @@ function Dashboard() {
         const updated = await toggleHabitDay(habitId, key);
         setHabits((prev) => {
           const next = prev.map((h) =>
-            h._id === habitId ? resolveHabitConflicts(h, updated) : h
+            h._id === habitId
+              ? { ...h, completions: updated.completions, updatedAt: updated.updatedAt }
+              : h
           );
-          debouncedSaveRef.current(next);
+          syncService.debouncedSave(next);
           return next;
         });
-        setLastSyncTime(Date.now());
         setSyncStatus('synced');
-      } catch {
-        enqueueAction({ type: 'toggle', habitId, key });
-        setPendingCount(getPendingQueue().length);
+      } catch (err) {
+        await syncService.queueAction('toggle', { habitId, key });
         setSyncStatus('error');
-        setError('Saved locally. Will auto-sync when network is ready.');
+        setError('Saved locally in IndexedDB. Will auto-sync when online.');
       }
     },
-    [selectedYear, selectedMonth, todayInfo, habits, record]
+    [selectedYear, selectedMonth, isDateLocked, habits, record, isOnline, todayInfo.dateKey, gamificationState.totalXP]
   );
 
-  const addHabit = useCallback(async (data) => {
-    try {
-      setSyncStatus('syncing');
-      const newHabit = await createHabit(data);
-      setHabits((prev) => {
-        const updated = [...prev, newHabit];
-        saveCachedHabits(updated);
-        return updated;
+  // Guided Flow step completion handler — auto-ticks matching habit
+  const handleStepCompleteInFlow = useCallback(
+    (step, habitKeyword) => {
+      if (!habitKeyword) return;
+      const kw = habitKeyword.toLowerCase();
+      const match = habits.find(
+        (h) =>
+          h.name.toLowerCase().includes(kw) ||
+          (h.category && h.category.toLowerCase().includes(kw))
+      );
+      if (match && !match.completions?.[todayInfo.dateKey]) {
+        toggleHabit(match._id, todayInfo.day);
+      }
+    },
+    [habits, todayInfo, toggleHabit]
+  );
+
+  // Guided Flow routine complete handler — awards +100 bonus XP!
+  const handleRoutineCompleted = useCallback(
+    async (completedRoutine) => {
+      const currentXP = (await getMeta('user_total_xp')) || 0;
+      const newXP = currentXP + 100;
+      await setMeta('user_total_xp', newXP);
+      const lvl = calculateLevelFromXP(newXP);
+      setGamificationState((prev) => ({
+        ...prev,
+        totalXP: newXP,
+        ...lvl,
+      }));
+      setFloatingXp({ amount: 100, id: Date.now() });
+      setTimeout(() => setFloatingXp(null), 2500);
+
+      // Check Routine Master badge
+      const curRoutineCount = (await getMeta('routines_completed_count')) || 0;
+      const nextCount = curRoutineCount + 1;
+      await setMeta('routines_completed_count', nextCount);
+
+      evaluateAndUnlockBadges({
+        completedRoutinesCount: nextCount,
+        totalXP: newXP,
+        currentStreak: globalStreak,
+        bestStreak: globalBestStreak,
+      }).then((badgeRes) => {
+        if (badgeRes.newlyUnlocked.length > 0) {
+          setUnlockedBadgeRecords(badgeRes.allUnlocked);
+          sounds.playBadgeUnlock();
+        }
       });
-      setLastSyncTime(Date.now());
-      setSyncStatus('synced');
-    } catch (e) {
-      setError(e.message);
-      setSyncStatus('error');
-    }
-  }, []);
+    },
+    [globalStreak, globalBestStreak]
+  );
+
+  const addHabit = useCallback(
+    async (data) => {
+      try {
+        setSyncStatus('syncing');
+        let newHabit;
+
+        if (isOnline) {
+          newHabit = await createHabit(data);
+        } else {
+          newHabit = {
+            ...data,
+            _id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            completions: {},
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          await syncService.queueAction('create', data);
+        }
+
+        await saveSingleHabitToDB(newHabit);
+        setHabits((prev) => [...prev, newHabit]);
+        setSyncStatus('synced');
+      } catch (e) {
+        setError(e.message || 'Failed to add habit.');
+        setSyncStatus('error');
+      }
+    },
+    [isOnline]
+  );
 
   const deleteHabit = useCallback(
     async (habitId) => {
-      setHabits((prev) => {
-        const updated = prev.filter((h) => h._id !== habitId);
-        saveCachedHabits(updated);
-        return updated;
-      });
-      try {
-        setSyncStatus('syncing');
-        await deleteHabitApi(habitId);
-        setLastSyncTime(Date.now());
-        setSyncStatus('synced');
-      } catch (e) {
-        setError(e.message);
-        loadHabits();
+      setHabits((prev) => prev.filter((h) => h._id !== habitId));
+      await softDeleteHabitInDB(habitId);
+
+      if (isOnline) {
+        try {
+          await deleteHabitApi(habitId);
+        } catch {
+          await syncService.queueAction('delete', { habitId });
+        }
+      } else {
+        await syncService.queueAction('delete', { habitId });
       }
     },
-    [loadHabits]
+    [isOnline]
   );
 
-  const editHabit = useCallback(async (habitId, data) => {
-    try {
-      setSyncStatus('syncing');
-      const updated = await updateHabit(habitId, data);
-      setHabits((prev) => {
-        const next = prev.map((h) => (h._id === habitId ? updated : h));
-        saveCachedHabits(next);
-        return next;
-      });
-      setLastSyncTime(Date.now());
-      setSyncStatus('synced');
-    } catch (e) {
-      setError(e.message);
-      setSyncStatus('error');
-    }
-  }, []);
+  const editHabit = useCallback(
+    async (habitId, data) => {
+      try {
+        const nextList = habits.map((h) =>
+          h._id === habitId ? { ...h, ...data, updatedAt: new Date().toISOString() } : h
+        );
+        setHabits(nextList);
+        const target = nextList.find((h) => h._id === habitId);
+        if (target) await saveSingleHabitToDB(target);
+
+        if (isOnline) {
+          await updateHabit(habitId, data);
+        } else {
+          await syncService.queueAction('update', { habitId, data });
+        }
+      } catch (e) {
+        setError(e.message || 'Failed to update habit.');
+      }
+    },
+    [habits, isOnline]
+  );
 
   // Reorder habits via Drag and Drop
   const handleReorderHabits = useCallback((draggedId, targetId) => {
@@ -319,7 +504,7 @@ function Dashboard() {
       const copy = [...prev];
       const [moved] = copy.splice(fromIdx, 1);
       copy.splice(toIdx, 0, moved);
-      saveCachedHabits(copy);
+      syncService.debouncedSave(copy);
       return copy;
     });
   }, []);
@@ -380,6 +565,106 @@ function Dashboard() {
     [habits, monthDaysMap, daysInSelectedMonth]
   );
 
+  // App Badge Update for pending tasks
+  useEffect(() => {
+    const pendingHabits = habits.filter((h) => !h.completions?.[todayInfo.dateKey]).length;
+    updateAppBadge(pendingHabits);
+  }, [habits, todayInfo.dateKey]);
+
+  // Phase 3 Event Handlers
+  const handleToggleTop3Priority = useCallback(async (habitId) => {
+    setTop3PriorityIds((prev) => {
+      let next;
+      if (prev.includes(habitId)) {
+        next = prev.filter((id) => id !== habitId);
+      } else {
+        if (prev.length >= 3) {
+          next = [...prev.slice(1), habitId];
+        } else {
+          next = [...prev, habitId];
+        }
+      }
+      setMeta('top3PriorityIds', next).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const handleSaveMood = useCallback(async (moodData) => {
+    const updated = {
+      ...(currentDayRecord || {}),
+      dateKey: todayInfo.dateKey,
+      mood: moodData,
+      updatedAt: new Date().toISOString(),
+    };
+    setCurrentDayRecord(updated);
+    await saveDayRecordToDB(updated);
+    const all = await getAllDayRecordsFromDB();
+    setAllDayRecords(all || []);
+  }, [currentDayRecord, todayInfo.dateKey]);
+
+  const handleSaveReflection = useCallback(async (reflectionData) => {
+    const updated = {
+      ...(currentDayRecord || {}),
+      dateKey: todayInfo.dateKey,
+      reflection: reflectionData,
+      updatedAt: new Date().toISOString(),
+    };
+    setCurrentDayRecord(updated);
+    await saveDayRecordToDB(updated);
+    // Award 25 XP for evening reflection
+    handleHabitXpChange(gamificationState.totalXP, 25).then((newState) => {
+      setGamificationState(newState);
+      setFloatingXp({ amount: 25, label: 'Reflection Done' });
+    });
+  }, [currentDayRecord, todayInfo.dateKey, gamificationState.totalXP]);
+
+  const handleClaimQuestReward = useCallback(async (questId, xpReward) => {
+    const nextClaimed = [...claimedQuestIds, questId];
+    setClaimedQuestIds(nextClaimed);
+    await setMeta(`claimedQuests_${todayInfo.dateKey}`, nextClaimed);
+    const newState = await handleHabitXpChange(gamificationState.totalXP, xpReward);
+    setGamificationState(newState);
+    setFloatingXp({ amount: xpReward, label: 'Quest Reward' });
+    triggerNeoConfetti();
+  }, [claimedQuestIds, todayInfo.dateKey, gamificationState.totalXP]);
+
+  const handleAcceptAIHabits = useCallback(async (newHabitsList) => {
+    const createdHabits = [];
+    for (const h of newHabitsList) {
+      const habitDoc = {
+        _id: 'habit_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+        name: h.title,
+        title: h.title,
+        description: h.description || '',
+        category: h.category || 'General',
+        priority: h.priority || 'Medium',
+        frequency: h.frequency || 'Daily',
+        routineStack: h.routineStack || '',
+        completions: {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await saveSingleHabitToDB(habitDoc);
+      createdHabits.push(habitDoc);
+    }
+    setHabits((prev) => [...prev, ...createdHabits]);
+    syncService.syncNow();
+    sounds.levelUp();
+    triggerNeoConfetti();
+  }, []);
+
+  const handleResetAllData = useCallback(async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const dbs = await window.indexedDB.databases?.();
+    if (dbs) {
+      for (const db of dbs) {
+        window.indexedDB.deleteDatabase(db.name);
+      }
+    }
+    window.location.reload();
+  }, []);
+
   // Global Keyboard Shortcuts
   const { showHelp: showShortcutsHelp, setShowHelp: setShowShortcutsHelp } = useKeyboardShortcuts({
     onNewTask: () => setShowModal(true),
@@ -389,6 +674,10 @@ function Dashboard() {
       if (pendingHabit) toggleHabit(pendingHabit._id, todayInfo.day);
     },
     onFocusSearch: () => searchInputRef.current?.focus(),
+    onFlowMode: () => setShowGuidedFlowModal(true),
+    onMoodTracker: () => setShowMoodModal(true),
+    onVoiceCheckin: () => setShowVoiceModal(true),
+    onAmbienceAudio: () => setShowAmbienceModal(true),
     onUndo: () => undo(),
     onRedo: () => redo(),
     onToggleTheme: () => toggleTheme(),
@@ -398,6 +687,12 @@ function Dashboard() {
       setShowHistoryModal(false);
       setShowPomodoroModal(false);
       setShowShortcutsHelp(false);
+      setShowAICoachModal(false);
+      setShowAmbienceModal(false);
+      setShowVoiceModal(false);
+      setShowMoodModal(false);
+      setShowEveningModal(false);
+      setShowSettingsModal(false);
     },
   });
 
@@ -459,12 +754,41 @@ function Dashboard() {
       <div className="max-w-7xl mx-auto space-y-6">
         <HealthTicker />
 
+        {/* RPG Level & XP Bar */}
+        <XPLevelBar
+          level={gamificationState.level}
+          currentLevelXP={gamificationState.currentLevelXP}
+          xpForNext={gamificationState.xpForNext}
+          totalXP={gamificationState.totalXP}
+          progressPercent={gamificationState.progressPercent}
+          title={gamificationState.title}
+          badgeColor={gamificationState.badgeColor}
+          floatingXp={floatingXp}
+          levelUpEvent={levelUpEvent}
+          onDismissLevelUp={() => setLevelUpEvent(null)}
+          onOpenBadges={() => setShowBadgesModal(true)}
+        />
+
         {/* Status / Alert Banners */}
+        {clockWarning && (
+          <div
+            role="alert"
+            className="flex items-center justify-between p-3 border-2 border-[#FF4444] bg-[#1E1D1C] text-[#FF4444] text-xs font-mono shadow-[3px_3px_0px_#FF4444]"
+          >
+            <div className="flex items-center gap-2">
+              <Clock size={15} />
+              <span>
+                <strong>CLOCK WARNING:</strong> {clockWarning}
+              </span>
+            </div>
+          </div>
+        )}
+
         {!isOnline && (
           <div className="flex items-center justify-between p-3 border-2 border-[#FFB800] bg-[#1E1D1C] text-[#FFB800] text-xs font-mono shadow-[3px_3px_0px_#000]">
             <div className="flex items-center gap-2">
               <WifiOff size={15} />
-              <span>OFFLINE MODE: Changes saved locally and will auto-sync when reconnected.</span>
+              <span>OFFLINE MODE: Changes saved locally in IndexedDB and will auto-sync when reconnected.</span>
             </div>
             {pendingCount > 0 && <span className="font-bold">({pendingCount} queued)</span>}
           </div>
@@ -482,6 +806,9 @@ function Dashboard() {
           </div>
         )}
 
+        {/* PWA Install & iOS Home Screen Banner */}
+        <PWAInstallBanner />
+
         {/* Dashboard Header with Sync Badge & Action Controls */}
         <DashboardHeader
           currentMonth={currentMonth}
@@ -495,10 +822,15 @@ function Dashboard() {
             setShowPomodoroModal(true);
           }}
           onOpenShortcuts={() => setShowShortcutsHelp(true)}
+          onOpenAICoach={() => setShowAICoachModal(true)}
+          onOpenAmbience={() => setShowAmbienceModal(true)}
+          onOpenVoice={() => setShowVoiceModal(true)}
+          onOpenMood={() => setShowMoodModal(true)}
+          onOpenSettings={() => setShowSettingsModal(true)}
           isOnline={isOnline}
           syncStatus={syncStatus}
           lastSyncTime={lastSyncTime}
-          onSyncNow={loadHabits}
+          onSyncNow={() => syncService.syncNow()}
           pendingCount={pendingCount}
         />
 
@@ -536,6 +868,16 @@ function Dashboard() {
           }}
         />
 
+        {/* Top 3 Priorities (Eisenhower Focus) */}
+        {habits.length > 0 && (
+          <Top3Priorities
+            habits={habits}
+            priorityIds={top3PriorityIds}
+            onTogglePriority={handleToggleTop3Priority}
+            onToggleComplete={(hId) => toggleHabit(hId, todayInfo.day)}
+          />
+        )}
+
         {/* Today's Daily Habit Checklist */}
         {habits.length > 0 && (
           <TodayTasksChecklist
@@ -550,6 +892,26 @@ function Dashboard() {
             }}
           />
         )}
+
+        {/* RPG Daily Quests & Weekly Boss Raid Panel */}
+        <DailyQuestsPanel
+          dayTasks={habits.map((h) => ({
+            id: h._id,
+            completed: Boolean(h.completions?.[todayInfo.dateKey]),
+            priority: (h.priority || 'medium').toLowerCase(),
+          }))}
+          dayRecord={currentDayRecord}
+          claimedQuestIds={claimedQuestIds}
+          onClaimQuestReward={handleClaimQuestReward}
+        />
+
+        {/* Habit Stacks & Routines Panel */}
+        <RoutinesPanel
+          onStartFlow={(routine) => {
+            setActiveRoutineForFlow(routine);
+            setShowGuidedFlowModal(true);
+          }}
+        />
 
         {/* Tools and Filter Bar */}
         <div className="dashboard-tools flex flex-wrap items-center justify-between gap-3 p-3 bg-[#1E1D1C] border-2 border-[#494848] shadow-[3px_3px_0px_#000]">
@@ -665,6 +1027,9 @@ function Dashboard() {
                 monthName={currentMonth}
                 year={selectedYear}
                 currentDay={isCurrentMonth ? todayInfo.day : 1}
+                userXP={completedCount * 25}
+                userLevel={Math.floor((completedCount * 25) / 250) + 1}
+                moodStats={{ great: 10, good: 6, neutral: 3, tough: 1 }}
               />
             </div>
             <div className="overflow-x-auto">
@@ -703,12 +1068,21 @@ function Dashboard() {
 
         {/* Streaks + Pie chart */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <StreakPanel habits={visibleHabits} />
+          <StreakPanel
+            habits={visibleHabits}
+            globalStreak={globalStreak}
+            globalBestStreak={globalBestStreak}
+            freezeTokensAvailable={freezeTokensAvailable}
+            onOpenFreezeModal={() => setShowFreezeModal(true)}
+          />
           <HabitPieChart habits={visibleHabits} monthDaysMap={monthDaysMap} />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Achievements habits={habits} completedCount={completedCount} />
+          <Achievements
+            unlockedBadgeRecords={unlockedBadgeRecords}
+            onOpenBadgeGallery={() => setShowBadgesModal(true)}
+          />
           <ReminderPanel
             habits={habits}
             notificationsEnabled={notificationsEnabled}
@@ -758,12 +1132,148 @@ function Dashboard() {
         <ShortcutsHelp onClose={() => setShowShortcutsHelp(false)} />
       )}
 
+      {/* Streak Freeze Shield Modal */}
+      <StreakFreezeModal
+        isOpen={showFreezeModal}
+        onClose={() => {
+          setShowFreezeModal(false);
+          setFreezePromptDate(null);
+        }}
+        freezeTokensAvailable={freezeTokensAvailable}
+        suggestedDateKey={freezePromptDate}
+        onFreezeApplied={(dateKey, remaining) => {
+          setFreezeTokensAvailable(remaining);
+          calculateStreakWithFreezes(habits, todayInfo.dateKey).then((s) => {
+            setGlobalStreak(s.currentStreak);
+            setGlobalBestStreak(s.longestStreak);
+          });
+        }}
+      />
+
+      {/* Badges Gallery Modal */}
+      <BadgeGalleryModal
+        isOpen={showBadgesModal}
+        onClose={() => setShowBadgesModal(false)}
+        unlockedBadgeRecords={unlockedBadgeRecords}
+        totalXP={gamificationState.totalXP}
+        level={gamificationState.level}
+        title={gamificationState.title}
+      />
+
+      {/* Full-Screen Guided Flow Mode Modal */}
+      <GuidedFlowModal
+        isOpen={showGuidedFlowModal}
+        routine={activeRoutineForFlow}
+        onClose={() => {
+          setShowGuidedFlowModal(false);
+          setActiveRoutineForFlow(null);
+        }}
+        onStepComplete={handleStepCompleteInFlow}
+        onRoutineCompleted={handleRoutineCompleted}
+      />
+
       {/* Backup & Restore Modal */}
       <BackupRestoreModal
         isOpen={showBackupModal}
         onClose={() => setShowBackupModal(false)}
         habits={habits}
-        onHabitsReload={loadHabits}
+        onHabitsReload={() => syncService.syncNow()}
+      />
+
+      {/* Phase 3: AI Habit Coach Modal */}
+      <AICoachModal
+        isOpen={showAICoachModal}
+        onClose={() => setShowAICoachModal(false)}
+        dayRecords={allDayRecords}
+        habits={habits}
+        onAcceptHabits={handleAcceptAIHabits}
+      />
+
+      {/* Phase 3: Focus Ambience Audio & Pomodoro Mixer */}
+      <AmbienceMixerModal
+        isOpen={showAmbienceModal}
+        onClose={() => setShowAmbienceModal(false)}
+        habits={habits}
+        onPomodoroSessionComplete={(hId, duration) => {
+          handleHabitXpChange(gamificationState.totalXP, 30).then((newState) => {
+            setGamificationState(newState);
+            setFloatingXp({ amount: 30, label: 'Pomodoro Focused' });
+          });
+        }}
+      />
+
+      {/* Phase 3: Voice Check-in & Speech Assistant Modal */}
+      <VoiceCheckinModal
+        isOpen={showVoiceModal}
+        onClose={() => setShowVoiceModal(false)}
+        habits={habits}
+        xp={gamificationState.totalXP}
+        streak={globalStreak}
+        onToggleHabit={(habitId) => toggleHabit(habitId, todayInfo.day)}
+        onAddTask={(taskName) => {
+          addHabit({
+            name: taskName,
+            title: taskName,
+            category: 'General',
+            priority: 'Medium',
+            frequency: 'Daily',
+          });
+        }}
+        onStartFocusTimer={() => {
+          setShowVoiceModal(false);
+          setShowAmbienceModal(true);
+        }}
+      />
+
+      {/* Phase 3: Daily Mood Tracker & Correlation Engine Modal */}
+      <MoodTrackerModal
+        isOpen={showMoodModal}
+        onClose={() => setShowMoodModal(false)}
+        currentDateKey={todayInfo.dateKey}
+        currentDayRecord={currentDayRecord}
+        allDayRecords={allDayRecords}
+        habits={habits}
+        onSaveMood={handleSaveMood}
+      />
+
+      {/* Phase 3: Evening Review Reflection Modal */}
+      <EveningReviewModal
+        isOpen={showEveningModal}
+        onClose={() => setShowEveningModal(false)}
+        currentDateKey={todayInfo.dateKey}
+        currentDayRecord={currentDayRecord}
+        onSaveReflection={handleSaveReflection}
+      />
+
+      {/* Phase 3: Settings & Data Management Modal */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        habits={habits}
+        dayRecords={allDayRecords}
+        onImportData={(bundle) => {
+          if (bundle.habits) {
+            setHabits(bundle.habits);
+            saveHabitsToDB(bundle.habits);
+            syncService.syncNow();
+          }
+        }}
+        onResetAllData={handleResetAllData}
+        onSimulateNextDay={() => {
+          setDebugDayOffset((prev) => prev + 1);
+        }}
+        onAddDebugXP={(amount) => {
+          handleHabitXpChange(gamificationState.totalXP, amount).then((s) => {
+            setGamificationState(s);
+            setFloatingXp({ amount, label: 'Debug Bonus' });
+          });
+        }}
+        onGrantDebugBadge={(badgeId) => {
+          const badge = { badgeId, unlockedAt: new Date().toISOString() };
+          setUnlockedBadgeRecords((prev) => [...prev, badge]);
+          sounds.badgeUnlock();
+          triggerNeoConfetti();
+        }}
       />
 
       {/* Developer Debug Panel for Midnight Rollover Testing */}
